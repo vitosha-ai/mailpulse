@@ -107,17 +107,32 @@ export async function checkDomain(domain: string): Promise<DomainCheck> {
   };
 }
 
-// Spamhaus special return codes: 127.255.255.x means "your query was refused"
-// (public resolver / over quota) — that is an ERROR, not a listing. Same idea
-// for URIBL's 127.0.0.255. Misreading these as "listed" is the classic bug.
+// Blocklists answer with special codes when they REFUSE a query (public
+// resolver, over quota) — and some of those codes look like listings.
+// Misreading them is the classic false-positive bug, so each list only
+// counts as "listed" for its documented listing ranges:
+//   Spamhaus DBL: listings are 127.0.1.x; 127.255.255.x = refused.
+//   URIBL:        listings are 127.0.0.2–14; 127.0.0.1 and .255 = refused.
+//   SURBL:        listings are 127.0.0.2–126 (bitmask); .1 = refused.
 function interpret(list: string, addresses: string[]): BlocklistResult {
+  const code = addresses[0] ?? null;
+  const refusedCodes = ["127.0.0.1", "127.0.0.255"];
   const refused =
     addresses.some((a) => a.startsWith("127.255.255.")) ||
-    (list.includes("uribl") && addresses.includes("127.0.0.255"));
+    addresses.some((a) => refusedCodes.includes(a));
   if (refused) {
-    return { list, listed: false, code: addresses[0] ?? null, error: "query refused (resolver blocked or over quota)" };
+    return { list, listed: false, code, error: "query refused (resolver blocked or over quota)" };
   }
-  return { list, listed: addresses.length > 0, code: addresses[0] ?? null, error: null };
+  let listed = false;
+  if (list.includes("spamhaus")) {
+    listed = addresses.some((a) => a.startsWith("127.0.1."));
+  } else {
+    listed = addresses.some((a) => {
+      const last = Number(a.split(".")[3]);
+      return a.startsWith("127.0.0.") && last >= 2 && last <= 126;
+    });
+  }
+  return { list, listed, code, error: null };
 }
 
 async function queryBl(list: string, qname: string): Promise<BlocklistResult> {
