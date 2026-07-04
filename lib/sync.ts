@@ -318,6 +318,19 @@ export async function syncDomains(): Promise<string> {
         done++;
       }
     }
+    // Senders whose source system didn't reveal a provider inherit it from
+    // their domain's MX records.
+    db.prepare(`
+      UPDATE senders SET provider = (
+        SELECT dc.mx_provider FROM domain_checks dc
+        WHERE dc.domain = senders.domain AND dc.mx_provider IS NOT NULL AND dc.mx_provider != 'other'
+      )
+      WHERE provider = 'other' AND EXISTS (
+        SELECT 1 FROM domain_checks dc
+        WHERE dc.domain = senders.domain AND dc.mx_provider IS NOT NULL AND dc.mx_provider != 'other'
+      )
+    `).run();
+
     const msg = `${done}/${domains.length} domains checked`;
     logSync("domains", true, msg);
     return msg;

@@ -57,7 +57,10 @@ function classifyMx(hosts: string[]): string | null {
   const joined = hosts.join(" ").toLowerCase();
   if (joined.includes("google.com") || joined.includes("googlemail")) return "google";
   if (joined.includes("protection.outlook.com")) return "microsoft";
-  if (joined.includes("maildoso") || joined.includes("mxrouting")) return "maildoso";
+  // Maildoso-provisioned domains use per-domain MX hosts like
+  // _dc-mx.<hash>.<domain> (observed on this fleet, July 2026).
+  if (joined.includes("maildoso") || joined.includes("mxrouting") || joined.includes("_dc-mx."))
+    return "maildoso";
   return hosts.length ? "other" : null;
 }
 
