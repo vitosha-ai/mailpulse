@@ -444,8 +444,44 @@ export function rescoreAll(): string {
       }),
     );
   }
+  // Volume-policy guardrail: the user's hard policy is 30 total emails per
+  // mailbox per day, but campaign limits and warmup volumes come from tools
+  // that don't know about each other. Estimate combined volume as the
+  // mailbox's most recent daily warmup sends plus its campaign daily limit,
+  // and raise ONE fleet-level alert listing offenders (per-sender alerts at
+  // this scale would flood the list).
+  const VOLUME_CEILING = 30;
+  const lastWarmupSent = db.prepare(`
+    SELECT sent FROM warmup_daily
+    WHERE email = ? AND date >= date('now', '-3 days') AND sent > 0
+    ORDER BY date DESC LIMIT 1
+  `);
+  const setVolume = db.prepare("UPDATE senders SET est_daily_volume = ? WHERE email = ?");
+  const offenders: { email: string; combined: number }[] = [];
+  for (const s of senders) {
+    const email = s.email as string;
+    const warmupSent = (lastWarmupSent.get(email) as { sent: number } | undefined)?.sent ?? 0;
+    const combined = warmupSent + ((s.daily_limit as number) ?? 0);
+    setVolume.run(combined, email);
+    if (combined > VOLUME_CEILING) offenders.push({ email, combined });
+  }
+  if (offenders.length > 0) {
+    offenders.sort((a, b) => b.combined - a.combined);
+    const top = offenders
+      .slice(0, 5)
+      .map((o) => `${o.email} (~${Math.round(o.combined)}/day)`)
+      .join(", ");
+    allAlerts.push({
+      target: "fleet",
+      target_type: "sender",
+      rule: "volume-policy",
+      severity: "warn",
+      message: `${offenders.length} mailbox(es) likely exceed your 30/day total policy once warmup sends are added on top of campaign limits. Highest: ${top}. Lower warmup ramps or campaign limits for these senders.`,
+    });
+  }
+
   const added = recordAlerts(allAlerts);
-  const msg = `${senders.length} senders rescored, ${added} new alerts`;
+  const msg = `${senders.length} senders rescored, ${added} new alerts, ${offenders.length} over volume policy`;
   logSync("scoring", true, msg);
   return msg;
 }

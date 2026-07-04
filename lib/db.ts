@@ -134,6 +134,7 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN trulyinbox_id TEXT",
     "ALTER TABLE senders ADD COLUMN ti_status TEXT",
     "ALTER TABLE senders ADD COLUMN ti_score REAL",
+    "ALTER TABLE senders ADD COLUMN est_daily_volume REAL",
   ];
   for (const stmt of addColumns) {
     try {
