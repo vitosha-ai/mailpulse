@@ -471,13 +471,14 @@ export function rescoreAll(): string {
       .slice(0, 5)
       .map((o) => `${o.email} (~${Math.round(o.combined)}/day)`)
       .join(", ");
-    allAlerts.push({
+    const volumeAlert: AlertCandidate = {
       target: "fleet",
       target_type: "sender",
       rule: "volume-policy",
       severity: "warn",
       message: `${offenders.length} mailbox(es) likely exceed your 30/day total policy once warmup sends are added on top of campaign limits. Highest: ${top}. Lower warmup ramps or campaign limits for these senders.`,
-    });
+    };
+    allAlerts.push(volumeAlert);
   }
 
   const added = recordAlerts(allAlerts);
