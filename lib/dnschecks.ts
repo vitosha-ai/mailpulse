@@ -7,9 +7,13 @@ import { getSetting } from "./db";
 const resolver = new Resolver();
 resolver.setServers(["8.8.8.8", "1.1.1.1"]); // for MX/TXT lookups (NOT blocklists)
 
-// Blocklist queries must NOT go through public resolvers (Spamhaus blocks
-// them), so those go through the system resolver or a Spamhaus DQS key.
+// Blocklist queries: with a Spamhaus DQS key the key itself authenticates the
+// query, so public resolvers work. (This machine's system DNS is a local
+// proxy that refuses Node's queries entirely, so explicit servers are
+// required.) Keyless SURBL/URIBL queries via public resolvers may be refused
+// — interpret() treats their refusal codes as errors, never as listings.
 const blResolver = new Resolver();
+blResolver.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const DKIM_SELECTORS = [
   "google", // Google Workspace
