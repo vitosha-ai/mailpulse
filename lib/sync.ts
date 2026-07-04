@@ -2,6 +2,7 @@ import { getDb } from "./db";
 import { listAllAccounts, warmupAnalytics } from "./instantly";
 import { listAllEmailAccounts, emailAccountStats, providerFromEsp } from "./saleshandy";
 import { listAllAccounts as listSmartleadAccounts } from "./smartlead";
+import { listAllAccounts as listTrulyInboxAccounts, bulkReports } from "./trulyinbox";
 import { checkDomain } from "./dnschecks";
 import { combinedScore, healthStatus, evaluateRules, recordAlerts, type AlertCandidate } from "./scoring";
 
@@ -12,6 +13,7 @@ export type SyncReport = {
   instantly: string;
   saleshandy: string;
   smartlead: string;
+  trulyinbox: string;
   domains: string;
   scoring: string;
 };
@@ -217,6 +219,65 @@ export async function syncSmartlead(): Promise<string> {
   }
 }
 
+export async function syncTrulyInbox(): Promise<string> {
+  const db = getDb();
+  try {
+    const accounts = await listTrulyInboxAccounts();
+    const insertMissing = db.prepare(`
+      INSERT OR IGNORE INTO senders (email, domain, provider, last_synced)
+      VALUES (?, ?, 'other', datetime('now'))
+    `);
+    const update = db.prepare(
+      "UPDATE senders SET trulyinbox_id = ?, ti_status = ? WHERE email = ?",
+    );
+    const alerts: AlertCandidate[] = [];
+    for (const a of accounts) {
+      insertMissing.run(a.email, domainOf(a.email));
+      update.run(a.id, a.status, a.email);
+      if (a.status === "error" || a.status === "auth-expired") {
+        alerts.push({
+          target: a.email,
+          target_type: "sender",
+          rule: "trulyinbox-error",
+          severity: "critical",
+          message: `${a.email}: TrulyInbox reports status "${a.status}" — warmup has stopped for this mailbox. Reconnect it in TrulyInbox.`,
+        });
+      }
+    }
+
+    // Daily warmup series for the last 7 days → same warmup_daily table the
+    // Instantly data uses, so trends and spam-rate rules apply uniformly.
+    const end = new Date().toISOString().slice(0, 10);
+    const start = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+    const reports = await bulkReports(accounts, start, end);
+    const insertDay = db.prepare(`
+      INSERT INTO warmup_daily (email, date, sent, landed_inbox, landed_spam, received)
+      VALUES (?, ?, ?, ?, ?, 0)
+      ON CONFLICT(email, date) DO UPDATE SET
+        sent = excluded.sent, landed_inbox = excluded.landed_inbox, landed_spam = excluded.landed_spam
+    `);
+    const latestRate = new Map<string, number>();
+    const tx = db.transaction(() => {
+      for (const r of reports) {
+        insertDay.run(r.email, r.date, r.sent, r.inbox, r.spam);
+        if (r.deliverabilityRate !== null) latestRate.set(r.email, r.deliverabilityRate);
+      }
+    });
+    tx();
+    const setScore = db.prepare("UPDATE senders SET ti_score = ? WHERE email = ?");
+    for (const [email, rate] of latestRate) setScore.run(rate, email);
+
+    const added = recordAlerts(alerts);
+    const msg = `${accounts.length} TrulyInbox accounts, ${reports.length} daily rows, ${added} error alert(s)`;
+    logSync("trulyinbox", true, msg);
+    return msg;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logSync("trulyinbox", false, msg);
+    return `TrulyInbox sync failed: ${msg}`;
+  }
+}
+
 export async function syncDomains(): Promise<string> {
   const db = getDb();
   try {
@@ -314,8 +375,12 @@ export function rescoreAll(): string {
     let blocklisted = false;
     let blocklistNames: string[] = [];
     if (dc) {
-      authScore =
-        ((dc.spf_ok ? 1 : 0) + (dc.dkim_ok ? 1 : 0) + (dc.dmarc_ok ? 1 : 0)) * (100 / 3);
+      // DKIM detection tries a list of common selector names; providers like
+      // Maildoso use custom selectors we can't guess. A found DKIM key adds
+      // credit; an unfound one is treated as unknown, not as a failure.
+      const parts = [dc.spf_ok ? 100 : 0, dc.dmarc_ok ? 100 : 0];
+      if (dc.dkim_ok) parts.push(100);
+      authScore = parts.reduce((a, b) => a + b, 0) / parts.length;
       const bls = JSON.parse((dc.blocklists as string) ?? "[]") as { list: string; listed: boolean }[];
       blocklistNames = bls.filter((b) => b.listed).map((b) => b.list);
       blocklisted = blocklistNames.length > 0;
@@ -324,7 +389,13 @@ export function rescoreAll(): string {
     const score = combinedScore({
       email,
       domain,
-      warmupScore: (s.warmup_score as number) ?? null,
+      // Warmup signal priority: Instantly health score, else Smartlead
+      // reputation, else TrulyInbox deliverability score.
+      warmupScore:
+        (s.warmup_score as number) ??
+        (s.sl_warmup_reputation as number) ??
+        (s.ti_score as number) ??
+        null,
       warmupInboxRate7d: warmupInboxRate,
       placementInboxRate: p?.inbox_rate ?? null,
       bounceRate: (s.bounce_rate as number) ?? null,
@@ -363,8 +434,9 @@ export async function fullSync(): Promise<SyncReport> {
   const instantly = await syncInstantly();
   const saleshandy = await syncSaleshandy();
   const smartlead = await syncSmartlead();
+  const trulyinbox = await syncTrulyInbox();
   const domains = await syncDomains();
   const scoring = rescoreAll();
   logSync("full", true, "full sync complete");
-  return { instantly, saleshandy, smartlead, domains, scoring };
+  return { instantly, saleshandy, smartlead, trulyinbox, domains, scoring };
 }

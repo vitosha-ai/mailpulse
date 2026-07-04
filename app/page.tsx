@@ -114,7 +114,7 @@ export default function Dashboard() {
       const data = await res.json();
       setNotice(
         data.report
-          ? `Sync done. ${data.report.instantly} · ${data.report.saleshandy} · ${data.report.smartlead} · ${data.report.domains} · ${data.report.scoring}`
+          ? `Sync done. ${data.report.instantly} · ${data.report.saleshandy} · ${data.report.smartlead} · ${data.report.trulyinbox} · ${data.report.domains} · ${data.report.scoring}`
           : "Sync finished.",
       );
     } catch (e) {
@@ -293,6 +293,11 @@ export default function Dashboard() {
                 done={!!keys.smartlead_api_key}
                 label="Connect Smartlead (if you use it)"
                 detail="Brings in your Smartlead senders and alerts you when one silently disconnects — Smartlead skips those in campaigns without telling you."
+              />
+              <ChecklistItem
+                done={!!keys.trulyinbox_api_key}
+                label="Connect TrulyInbox (if you warm mailboxes there)"
+                detail="Adds warmup deliverability scores and inbox/spam trends for the mailboxes not warmed in Instantly."
               />
               <ChecklistItem
                 done={!!keys.spamhaus_dqs_key}

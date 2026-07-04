@@ -19,6 +19,11 @@ const FIELDS = [
     help: "Smartlead → Settings → Smartlead API key. Brings in your Smartlead sender accounts, their warmup reputation, and — importantly — disconnect detection (Smartlead silently skips disconnected mailboxes in campaigns).",
   },
   {
+    key: "trulyinbox_api_key",
+    label: "TrulyInbox API key",
+    help: "TrulyInbox → API Keys tab (needs Starter plan or higher). Brings warmup deliverability scores and inbox/spam rates for the mailboxes warmed in TrulyInbox.",
+  },
+  {
     key: "spamhaus_dqs_key",
     label: "Spamhaus DQS key (free)",
     help: "Sign up free at spamhaus.com → Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",
