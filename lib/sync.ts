@@ -256,16 +256,23 @@ export async function syncTrulyInbox(): Promise<string> {
       ON CONFLICT(email, date) DO UPDATE SET
         sent = excluded.sent, landed_inbox = excluded.landed_inbox, landed_spam = excluded.landed_spam
     `);
-    const latestRate = new Map<string, number>();
+    const totals = new Map<string, { sent: number; inbox: number }>();
     const tx = db.transaction(() => {
       for (const r of reports) {
         insertDay.run(r.email, r.date, r.sent, r.inbox, r.spam);
-        if (r.deliverabilityRate !== null) latestRate.set(r.email, r.deliverabilityRate);
+        const t = totals.get(r.email) ?? { sent: 0, inbox: 0 };
+        t.sent += r.sent;
+        t.inbox += r.inbox;
+        totals.set(r.email, t);
       }
     });
     tx();
+    // 7-day aggregate deliverability (inbox / sent) — steadier than any
+    // single day's rate.
     const setScore = db.prepare("UPDATE senders SET ti_score = ? WHERE email = ?");
-    for (const [email, rate] of latestRate) setScore.run(rate, email);
+    for (const [email, t] of totals) {
+      if (t.sent > 0) setScore.run(Math.round((t.inbox / t.sent) * 1000) / 10, email);
+    }
 
     const added = recordAlerts(alerts);
     const msg = `${accounts.length} TrulyInbox accounts, ${reports.length} daily rows, ${added} error alert(s)`;

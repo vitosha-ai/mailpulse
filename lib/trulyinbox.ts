@@ -47,12 +47,11 @@ export type TrulyInboxAccount = {
 export async function listAllAccounts(): Promise<TrulyInboxAccount[]> {
   const all: TrulyInboxAccount[] = [];
   for (let page = 1; page < 100; page++) {
-    const data = await call<Record<string, unknown>>("GET", `/email-accounts?page=${page}&limit=100`);
-    // Accept the common wrapper shapes.
-    const items = (data.emailAccounts ??
-      data.data ??
-      (data.payload as Record<string, unknown> | undefined)?.emailAccounts ??
-      []) as Record<string, unknown>[];
+    // Live shape (verified July 2026): { payload: { items, total, page, totalPages } }
+    const data = await call<{
+      payload?: { items?: Record<string, unknown>[]; totalPages?: number };
+    }>("GET", `/email-accounts?page=${page}&limit=100`);
+    const items = data.payload?.items ?? [];
     for (const raw of items) {
       const email = String(raw.fromEmail ?? raw.email ?? "").toLowerCase();
       if (!email.includes("@")) continue;
@@ -62,8 +61,8 @@ export async function listAllAccounts(): Promise<TrulyInboxAccount[]> {
         status: raw.status != null ? String(raw.status) : null,
       });
     }
-    const totalPages = Number(data.totalPages ?? 1);
-    if (items.length < 100 || page >= totalPages) break;
+    const totalPages = Number(data.payload?.totalPages ?? 1);
+    if (items.length === 0 || page >= totalPages) break;
     await new Promise((r) => setTimeout(r, PACE_MS));
   }
   return all;
@@ -79,54 +78,48 @@ export type TiDailyReport = {
 };
 
 // Bulk daily reports, up to 50 accounts per call.
+// Live shape (verified July 2026): body { emailAccountIds, from, to } →
+// { payload: { reports: [{ emailAccountId, days: [{date, sent, inbox, spam,
+//   bounced, deliverabilityRate, ...}] }] } }
 export async function bulkReports(
   accounts: { id: string; email: string }[],
-  startDate: string,
-  endDate: string,
+  from: string,
+  to: string,
 ): Promise<TiDailyReport[]> {
   const emailById = new Map(accounts.map((a) => [a.id, a.email]));
   const out: TiDailyReport[] = [];
 
   for (let i = 0; i < accounts.length; i += 50) {
     const batch = accounts.slice(i, i + 50);
-    const data = await call<unknown>("POST", "/reports/bulk", {
-      emailAccountIds: batch.map((a) => a.id),
-      startDate,
-      endDate,
+    const data = await call<{
+      payload?: {
+        reports?: {
+          emailAccountId: number | string;
+          days?: Record<string, unknown>[];
+        }[];
+      };
+    }>("POST", "/reports/bulk", {
+      emailAccountIds: batch.map((a) => Number(a.id)),
+      from,
+      to,
     });
 
-    // Shape is only partially documented — walk the payload and collect
-    // anything that looks like a per-day report row.
-    const visit = (node: unknown, contextEmail: string | null) => {
-      if (Array.isArray(node)) {
-        for (const item of node) visit(item, contextEmail);
-        return;
-      }
-      if (node === null || typeof node !== "object") return;
-      const obj = node as Record<string, unknown>;
-
-      let email = contextEmail;
-      const idRef = obj.emailAccountId ?? obj.accountId ?? obj.id;
-      if (idRef != null && emailById.has(String(idRef))) email = emailById.get(String(idRef))!;
-      const emailField = obj.fromEmail ?? obj.email;
-      if (typeof emailField === "string" && emailField.includes("@")) email = emailField.toLowerCase();
-
-      const date = obj.date ?? obj.day ?? obj.reportDate;
-      if (email && typeof date === "string" && (obj.sent != null || obj.inbox != null)) {
-        const num = (v: unknown) => (typeof v === "number" ? v : parseFloat(String(v ?? "")) || 0);
+    const num = (v: unknown) => (typeof v === "number" ? v : parseFloat(String(v ?? "")) || 0);
+    for (const report of data.payload?.reports ?? []) {
+      const email = emailById.get(String(report.emailAccountId));
+      if (!email) continue;
+      for (const day of report.days ?? []) {
+        if (typeof day.date !== "string") continue;
         out.push({
           email,
-          date: date.slice(0, 10),
-          sent: num(obj.sent),
-          inbox: num(obj.inbox),
-          spam: num(obj.spam ?? obj.spamInbox),
-          deliverabilityRate:
-            obj.deliverabilityRate != null ? num(obj.deliverabilityRate) : null,
+          date: day.date.slice(0, 10),
+          sent: num(day.sent),
+          inbox: num(day.inbox),
+          spam: num(day.spam),
+          deliverabilityRate: day.deliverabilityRate != null ? num(day.deliverabilityRate) : null,
         });
       }
-      for (const v of Object.values(obj)) visit(v, email);
-    };
-    visit(data, null);
+    }
     if (i + 50 < accounts.length) await new Promise((r) => setTimeout(r, PACE_MS));
   }
   return out;
