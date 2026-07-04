@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [keys, setKeys] = useState<Record<string, string | null> | null>(null);
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams();
@@ -98,6 +99,13 @@ export default function Dashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then(setKeys)
+      .catch(() => {});
+  }, []);
 
   const runSync = async () => {
     setBusy("Syncing with Instantly + Saleshandy + DNS — this can take a few minutes…");
@@ -259,6 +267,43 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Setup checklist — shows until everything is connected */}
+        {keys && (!keys.instantly_api_key || !keys.saleshandy_api_key || !keys.spamhaus_dqs_key || total === 0) && (
+          <div className="mb-6 rounded-2xl border border-sky-500/30 bg-sky-500/5 p-5 backdrop-blur">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-sky-300">
+              Getting started
+            </p>
+            <ul className="mt-3 space-y-2 text-sm">
+              <ChecklistItem
+                done={!!keys.instantly_api_key}
+                label="Connect Instantly"
+                detail="Paste your Instantly API key in Settings — this brings in all your mailboxes and their warmup health scores."
+              />
+              <ChecklistItem
+                done={total > 0}
+                label="Run your first sync"
+                detail="Click ⟳ Sync now (top right). Your senders appear here with scores within a few minutes."
+              />
+              <ChecklistItem
+                done={!!keys.saleshandy_api_key}
+                label="Connect Saleshandy (optional but recommended)"
+                detail="Adds bounce rates from your real campaigns — an early warning sign the warmup data can miss."
+              />
+              <ChecklistItem
+                done={!!keys.spamhaus_dqs_key}
+                label="Add the free Spamhaus key (optional)"
+                detail="Lets the app check whether your domains are on spam blocklists — the most serious red flag there is."
+              />
+            </ul>
+            <a
+              href="/settings"
+              className="mt-4 inline-block rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-200 transition hover:bg-sky-500/20"
+            >
+              Open Settings →
+            </a>
+          </div>
+        )}
+
         {/* Status summary */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(["green", "yellow", "red", "unknown"] as const).map((st) => {
@@ -322,6 +367,43 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Plain-English guide */}
+        <details className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-300 transition hover:text-white">
+            💡 How to read this dashboard
+          </summary>
+          <div className="grid gap-x-6 gap-y-3 border-t border-slate-800 px-4 py-4 text-sm leading-relaxed text-slate-400 sm:grid-cols-2">
+            <p>
+              <b className="text-slate-200">Score</b> — the overall health of a sender, 0–100. It blends
+              real placement tests, warmup results, bounce rate, and domain setup. <b className="text-emerald-300">80+ is healthy</b>,{" "}
+              <b className="text-amber-300">60–79 needs attention</b>, <b className="text-red-400">below 60 means stop sending</b>.
+            </p>
+            <p>
+              <b className="text-slate-200">Warmup</b> — Instantly&apos;s 0–100 health score from warmup activity.
+              If this slides down day after day, the mailbox is heading for the spam folder.
+            </p>
+            <p>
+              <b className="text-slate-200">Bounce</b> — % of your real campaign emails that bounced (from
+              Saleshandy). Above 3% is a problem; above 8% is urgent.
+            </p>
+            <p>
+              <b className="text-slate-200">Gmail / Microsoft</b> — the verdict from the latest real placement
+              test: did a test email from this sender land in the <b className="text-emerald-300">inbox</b> or in{" "}
+              <b className="text-red-400">spam</b> at that provider?
+            </p>
+            <p>
+              <b className="text-slate-200">Auth (✓✓✓)</b> — three checkmarks for SPF, DKIM and DMARC: the DNS
+              records that prove your emails aren&apos;t forged. Any ✗ hurts deliverability and is usually a
+              quick fix at your domain provider.
+            </p>
+            <p>
+              <b className="text-slate-200">Action</b> — what we recommend doing with this sender right now.
+              Select rows with the checkboxes to Pause / Resume / Set limit in bulk — changes are pushed
+              straight to Instantly.
+            </p>
+          </div>
+        </details>
+
         {/* Filters + bulk actions */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input
@@ -383,14 +465,15 @@ export default function Dashboard() {
                   />
                 </th>
                 <th className="p-3">Sender</th>
-                <th className="p-3">Provider</th>
-                <th className="p-3">Score</th>
-                <th className="p-3">Warmup</th>
-                <th className="p-3">Bounce</th>
-                <th className="p-3">Gmail</th>
-                <th className="p-3">Microsoft</th>
-                <th className="p-3">Auth</th>
-                <th className="p-3">Limit</th>
+                <th className="p-3" title="Where this mailbox is hosted">Provider</th>
+                <th className="p-3" title="Overall health, 0–100. 80+ healthy · 60–79 attention · <60 stop sending">Score</th>
+                <th className="p-3" title="Instantly warmup health score (0–100)">Warmup</th>
+                <th className="p-3" title="% of campaign emails that bounced. Above 3% is a problem">Bounce</th>
+                <th className="p-3" title="Latest placement test verdict at Gmail">Gmail</th>
+                <th className="p-3" title="Latest placement test verdict at Outlook/Microsoft 365">Microsoft</th>
+                <th className="p-3" title="SPF / DKIM / DMARC — DNS records proving your mail isn't forged">Auth</th>
+                <th className="p-3" title="Max emails per day this mailbox may send">Limit</th>
+                <th className="p-3" title="Recommended next step for this sender">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -460,12 +543,13 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="p-3 font-mono tabular-nums text-slate-400">{s.daily_limit ?? "—"}</td>
+                    <td className="p-3">{actionChip(s)}</td>
                   </tr>
                 );
               })}
               {senders.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="p-10 text-center text-slate-500">
+                  <td colSpan={11} className="p-10 text-center text-slate-500">
                     No senders yet. Add your API keys in{" "}
                     <a href="/settings" className="text-cyan-300 underline decoration-cyan-500/50 hover:text-cyan-200">
                       Settings
@@ -480,6 +564,77 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function ChecklistItem({ done, label, detail }: { done: boolean; label: string; detail: string }) {
+  return (
+    <li className="flex items-start gap-2.5">
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+          done
+            ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/50"
+            : "bg-slate-800 text-slate-500 ring-1 ring-slate-700"
+        }`}
+      >
+        {done ? "✓" : ""}
+      </span>
+      <span>
+        <span className={done ? "text-slate-500 line-through" : "text-slate-200"}>{label}</span>
+        {!done && <span className="block text-xs text-slate-500">{detail}</span>}
+      </span>
+    </li>
+  );
+}
+
+function actionChip(s: Sender) {
+  if (s.instantly_status === 2) {
+    return (
+      <span
+        title="This sender is paused. Resume it once its score recovers (usually after 2–3 weeks of warmup-only rest)."
+        className="whitespace-nowrap rounded-md bg-slate-700/40 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400 ring-1 ring-slate-600/40"
+      >
+        resting
+      </span>
+    );
+  }
+  switch (s.health_status) {
+    case "green":
+      return (
+        <span
+          title="Healthy — keep sending at the current volume."
+          className="whitespace-nowrap rounded-md bg-emerald-500/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-500/30"
+        >
+          ✓ keep going
+        </span>
+      );
+    case "yellow":
+      return (
+        <span
+          title="Degrading — select this row and use “Set limit…” to cut its daily volume roughly in half, then watch it for a few days."
+          className="whitespace-nowrap rounded-md bg-amber-500/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-300 ring-1 ring-amber-500/30"
+        >
+          ↓ slow down
+        </span>
+      );
+    case "red":
+      return (
+        <span
+          title="Critical — select this row and hit Pause. Keep warmup running; revisit in 2–3 weeks."
+          className="whitespace-nowrap rounded-md bg-red-500/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-red-300 ring-1 ring-red-500/40"
+        >
+          ⏸ pause now
+        </span>
+      );
+    default:
+      return (
+        <span
+          title="No data yet — run a sync (and a placement test) to score this sender."
+          className="whitespace-nowrap rounded-md bg-slate-700/40 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400 ring-1 ring-slate-600/40"
+        >
+          ⟳ sync first
+        </span>
+      );
+  }
 }
 
 function verdictBadge(v: string | null) {
