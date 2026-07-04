@@ -14,6 +14,11 @@ const FIELDS = [
     help: "Saleshandy → Settings → API (requires Pro plan or higher). Adds bounce rates and campaign-side scores.",
   },
   {
+    key: "smartlead_api_key",
+    label: "Smartlead API key",
+    help: "Smartlead → Settings → Smartlead API key. Brings in your Smartlead sender accounts, their warmup reputation, and — importantly — disconnect detection (Smartlead silently skips disconnected mailboxes in campaigns).",
+  },
+  {
     key: "spamhaus_dqs_key",
     label: "Spamhaus DQS key (free)",
     help: "Sign up free at spamhaus.com → Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",

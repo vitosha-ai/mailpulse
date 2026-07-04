@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSetting, setSetting } from "@/lib/db";
 
-const KEYS = ["instantly_api_key", "saleshandy_api_key", "spamhaus_dqs_key"] as const;
+const KEYS = ["instantly_api_key", "saleshandy_api_key", "smartlead_api_key", "spamhaus_dqs_key"] as const;
 
 function mask(v: string | null): string | null {
   if (!v) return null;

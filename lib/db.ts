@@ -118,11 +118,27 @@ function migrate(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       started_at TEXT NOT NULL DEFAULT (datetime('now')),
       finished_at TEXT,
-      kind TEXT NOT NULL,   -- instantly | saleshandy | domains | placement | full
+      kind TEXT NOT NULL,   -- instantly | saleshandy | smartlead | domains | placement | full
       ok INTEGER,
       detail TEXT
     );
   `);
+
+  // Additive migrations for databases created before these columns existed.
+  const addColumns = [
+    "ALTER TABLE senders ADD COLUMN smartlead_id TEXT",
+    "ALTER TABLE senders ADD COLUMN smartlead_status TEXT",
+    "ALTER TABLE senders ADD COLUMN sl_warmup_reputation REAL",
+    "ALTER TABLE senders ADD COLUMN sl_smtp_ok INTEGER",
+    "ALTER TABLE senders ADD COLUMN sl_imap_ok INTEGER",
+  ];
+  for (const stmt of addColumns) {
+    try {
+      db.exec(stmt);
+    } catch {
+      // column already exists
+    }
+  }
 }
 
 export function getSetting(key: string): string | null {

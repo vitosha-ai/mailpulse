@@ -1,8 +1,9 @@
 import { getDb } from "./db";
 import { listAllAccounts, warmupAnalytics } from "./instantly";
 import { listAllEmailAccounts, emailAccountStats } from "./saleshandy";
+import { listAllAccounts as listSmartleadAccounts } from "./smartlead";
 import { checkDomain } from "./dnschecks";
-import { combinedScore, healthStatus, evaluateRules, recordAlerts } from "./scoring";
+import { combinedScore, healthStatus, evaluateRules, recordAlerts, type AlertCandidate } from "./scoring";
 
 // Orchestrates a full data refresh. Each stage is independent — a failing
 // stage (e.g. missing API key) logs and moves on so the others still run.
@@ -10,6 +11,7 @@ import { combinedScore, healthStatus, evaluateRules, recordAlerts } from "./scor
 export type SyncReport = {
   instantly: string;
   saleshandy: string;
+  smartlead: string;
   domains: string;
   scoring: string;
 };
@@ -154,6 +156,55 @@ export async function syncSaleshandy(): Promise<string> {
     const msg = e instanceof Error ? e.message : String(e);
     logSync("saleshandy", false, msg);
     return `Saleshandy sync failed: ${msg}`;
+  }
+}
+
+export async function syncSmartlead(): Promise<string> {
+  const db = getDb();
+  try {
+    const accounts = await listSmartleadAccounts();
+    const insertMissing = db.prepare(`
+      INSERT OR IGNORE INTO senders (email, domain, provider, last_synced)
+      VALUES (?, ?, 'other', datetime('now'))
+    `);
+    const update = db.prepare(`
+      UPDATE senders SET
+        smartlead_id = ?, smartlead_status = ?, sl_warmup_reputation = ?,
+        sl_smtp_ok = ?, sl_imap_ok = ?
+      WHERE email = ?
+    `);
+    const flag = (v: boolean | null) => (v === null ? null : v ? 1 : 0);
+
+    const alerts: AlertCandidate[] = [];
+    for (const a of accounts) {
+      insertMissing.run(a.email, domainOf(a.email));
+      update.run(
+        String(a.id),
+        a.status,
+        a.warmupReputation,
+        flag(a.smtpOk),
+        flag(a.imapOk),
+        a.email,
+      );
+      // Smartlead silently skips disconnected senders in campaigns — surface it loudly.
+      if (a.smtpOk === false || a.imapOk === false) {
+        alerts.push({
+          target: a.email,
+          target_type: "sender",
+          rule: "smartlead-disconnected",
+          severity: "critical",
+          message: `${a.email}: Smartlead reports this mailbox as disconnected (${a.smtpOk === false ? "SMTP" : ""}${a.smtpOk === false && a.imapOk === false ? " + " : ""}${a.imapOk === false ? "IMAP" : ""} failing). Smartlead silently skips it in campaigns — reconnect it in Smartlead.`,
+        });
+      }
+    }
+    const added = recordAlerts(alerts);
+    const msg = `${accounts.length} Smartlead accounts synced, ${added} disconnect alert(s)`;
+    logSync("smartlead", true, msg);
+    return msg;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logSync("smartlead", false, msg);
+    return `Smartlead sync failed: ${msg}`;
   }
 }
 
@@ -302,8 +353,9 @@ export function rescoreAll(): string {
 export async function fullSync(): Promise<SyncReport> {
   const instantly = await syncInstantly();
   const saleshandy = await syncSaleshandy();
+  const smartlead = await syncSmartlead();
   const domains = await syncDomains();
   const scoring = rescoreAll();
   logSync("full", true, "full sync complete");
-  return { instantly, saleshandy, domains, scoring };
+  return { instantly, saleshandy, smartlead, domains, scoring };
 }

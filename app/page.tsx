@@ -114,7 +114,7 @@ export default function Dashboard() {
       const data = await res.json();
       setNotice(
         data.report
-          ? `Sync done. ${data.report.instantly} · ${data.report.saleshandy} · ${data.report.domains} · ${data.report.scoring}`
+          ? `Sync done. ${data.report.instantly} · ${data.report.saleshandy} · ${data.report.smartlead} · ${data.report.domains} · ${data.report.scoring}`
           : "Sync finished.",
       );
     } catch (e) {
@@ -288,6 +288,11 @@ export default function Dashboard() {
                 done={!!keys.saleshandy_api_key}
                 label="Connect Saleshandy (optional but recommended)"
                 detail="Adds bounce rates from your real campaigns — an early warning sign the warmup data can miss."
+              />
+              <ChecklistItem
+                done={!!keys.smartlead_api_key}
+                label="Connect Smartlead (if you use it)"
+                detail="Brings in your Smartlead senders and alerts you when one silently disconnects — Smartlead skips those in campaigns without telling you."
               />
               <ChecklistItem
                 done={!!keys.spamhaus_dqs_key}
