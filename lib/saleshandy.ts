@@ -2,6 +2,9 @@ import { getSetting } from "./db";
 
 // Saleshandy Open API client. Docs: https://developer.saleshandy.com
 // Auth: x-api-key header (Settings → API in Saleshandy; needs Pro plan+).
+// NOTE: response shapes below were verified against the live API (July 2026)
+// and differ from the docs: list lives at payload.emails with fromEmail,
+// stats live at payload["Email Analytics"] with human-labeled keys.
 const BASE = "https://open-api.saleshandy.com/v1";
 
 export class SaleshandyError extends Error {
@@ -38,46 +41,79 @@ async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unkn
 }
 
 export type SaleshandyAccount = {
-  id: string | number;
+  id: string;
   email: string;
-  status?: string;
-  healthScore?: number;
-  esp?: string;
-  [key: string]: unknown;
+  status: number | null; // 1 = active (observed)
+  esp: string | null; // e.g. "o365", "gmail"
+  dailyLimit: number | null;
+};
+
+type RawAccount = {
+  id: string | number;
+  fromEmail?: string;
+  email?: string;
+  status?: number;
+  emailServiceProvider?: string;
+  settings?: { code: string; value: string }[];
 };
 
 export async function listAllEmailAccounts(): Promise<SaleshandyAccount[]> {
   const all: SaleshandyAccount[] = [];
   for (let page = 1; page < 100; page++) {
-    const data = await call<{ payload?: { emailAccounts?: SaleshandyAccount[] } }>(
-      "POST",
-      "/email-accounts",
-      { page, pageSize: 100 },
-    );
-    // Response shapes vary across Saleshandy endpoints; accept both wrappers.
-    const items =
-      data.payload?.emailAccounts ??
-      (data as unknown as { emailAccounts?: SaleshandyAccount[] }).emailAccounts ??
-      [];
-    all.push(...items);
+    const data = await call<{ payload?: { emails?: RawAccount[] } }>("POST", "/email-accounts", {
+      page,
+      pageSize: 100,
+    });
+    const items = data.payload?.emails ?? [];
+    for (const raw of items) {
+      const email = String(raw.fromEmail ?? raw.email ?? "").toLowerCase();
+      if (!email.includes("@")) continue;
+      const limitSetting = raw.settings?.find((s) => s.code === "daily-sending-limit");
+      all.push({
+        id: String(raw.id),
+        email,
+        status: typeof raw.status === "number" ? raw.status : null,
+        esp: raw.emailServiceProvider ?? null,
+        dailyLimit: limitSetting ? parseInt(limitSetting.value, 10) || null : null,
+      });
+    }
     if (items.length < 100) break;
   }
   return all;
 }
 
 export type SaleshandyAccountStats = {
-  setupScore?: number;
-  inboxScore?: number;
-  bounceRate?: number;
-  totalSent?: number;
-  [key: string]: unknown;
+  setupScore: number | null;
+  inboxScore: number | null;
+  bounceRate: number | null;
+  totalSent: number | null;
 };
 
-export async function emailAccountStats(emailId: string | number): Promise<SaleshandyAccountStats> {
-  const data = await call<{ payload?: SaleshandyAccountStats }>(
+export async function emailAccountStats(emailId: string): Promise<SaleshandyAccountStats> {
+  const data = await call<{ payload?: { "Email Analytics"?: Record<string, unknown>[] } }>(
     "POST",
     "/analytics/emailaccount/stats",
     { emailId },
   );
-  return data.payload ?? (data as unknown as SaleshandyAccountStats);
+  const row = data.payload?.["Email Analytics"]?.[0] ?? {};
+  const num = (v: unknown): number | null => {
+    if (typeof v === "number") return v;
+    const n = parseFloat(String(v ?? ""));
+    return Number.isNaN(n) ? null : n;
+  };
+  return {
+    setupScore: num(row["Setup Score"]),
+    inboxScore: num(row["Inbox Score"]),
+    bounceRate: num(row["Bounce Rate"]),
+    totalSent: num(row["Total Sent"]),
+  };
+}
+
+// Map Saleshandy's ESP names onto MailPulse provider buckets.
+export function providerFromEsp(esp: string | null): string | null {
+  if (!esp) return null;
+  const e = esp.toLowerCase();
+  if (e.includes("o365") || e.includes("outlook") || e.includes("microsoft")) return "microsoft";
+  if (e.includes("gmail") || e.includes("google") || e.includes("gsuite")) return "google";
+  return null;
 }

@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { listAllAccounts, warmupAnalytics } from "./instantly";
-import { listAllEmailAccounts, emailAccountStats } from "./saleshandy";
+import { listAllEmailAccounts, emailAccountStats, providerFromEsp } from "./saleshandy";
 import { listAllAccounts as listSmartleadAccounts } from "./smartlead";
 import { checkDomain } from "./dnschecks";
 import { combinedScore, healthStatus, evaluateRules, recordAlerts, type AlertCandidate } from "./scoring";
@@ -112,37 +112,33 @@ export async function syncSaleshandy(): Promise<string> {
   try {
     const accounts = await listAllEmailAccounts();
     const update = db.prepare(`
-      UPDATE senders SET saleshandy_id = ?, saleshandy_status = ?, sh_setup_score = COALESCE(?, sh_setup_score)
+      UPDATE senders SET
+        saleshandy_id = ?, saleshandy_status = ?,
+        daily_limit = COALESCE(daily_limit, ?),
+        provider = CASE WHEN provider = 'other' AND ? IS NOT NULL THEN ? ELSE provider END
       WHERE email = ?
     `);
     const insertMissing = db.prepare(`
-      INSERT OR IGNORE INTO senders (email, domain, provider, saleshandy_id, saleshandy_status, last_synced)
-      VALUES (?, ?, 'other', ?, ?, datetime('now'))
+      INSERT OR IGNORE INTO senders (email, domain, provider, saleshandy_id, last_synced)
+      VALUES (?, ?, 'other', ?, datetime('now'))
     `);
     for (const a of accounts) {
-      const email = a.email?.toLowerCase();
-      if (!email) continue;
-      insertMissing.run(email, domainOf(email), String(a.id), a.status ?? null);
-      update.run(String(a.id), a.status ?? null, a.healthScore ?? null, email);
+      insertMissing.run(a.email, domainOf(a.email), a.id);
+      const prov = providerFromEsp(a.esp);
+      update.run(a.id, a.status != null ? String(a.status) : null, a.dailyLimit, prov, prov, a.email);
     }
 
     // Per-account stats: one call each, undocumented rate limits → gentle
     // pacing (~4/sec) and we keep going on individual failures.
     const setStats = db.prepare(
-      "UPDATE senders SET bounce_rate = ?, sh_setup_score = COALESCE(?, sh_setup_score), sh_inbox_score = ? WHERE email = ?",
+      "UPDATE senders SET bounce_rate = ?, sh_setup_score = ?, sh_inbox_score = ? WHERE email = ?",
     );
     let ok = 0;
     let failed = 0;
     for (const a of accounts) {
-      const email = a.email?.toLowerCase();
-      if (!email) continue;
       try {
         const stats = await emailAccountStats(a.id);
-        const bounce =
-          typeof stats.bounceRate === "number"
-            ? stats.bounceRate
-            : parseFloat(String(stats.bounceRate ?? "")) || null;
-        setStats.run(bounce, stats.setupScore ?? null, stats.inboxScore ?? null, email);
+        setStats.run(stats.bounceRate, stats.setupScore, stats.inboxScore, a.email);
         ok++;
       } catch {
         failed++;
