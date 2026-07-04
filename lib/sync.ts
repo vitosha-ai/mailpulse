@@ -128,22 +128,35 @@ export async function syncSaleshandy(): Promise<string> {
       update.run(a.id, a.status != null ? String(a.status) : null, a.dailyLimit, prov, prov, a.email);
     }
 
-    // Per-account stats: one call each, undocumented rate limits → gentle
-    // pacing (~4/sec) and we keep going on individual failures.
+    // Per-account stats: one call each. Saleshandy rate-limits aggressively
+    // (observed: cuts off after ~20 rapid calls), so pace at ~1 call/1.2 s and
+    // give failures a slower second pass.
     const setStats = db.prepare(
       "UPDATE senders SET bounce_rate = ?, sh_setup_score = ?, sh_inbox_score = ? WHERE email = ?",
     );
     let ok = 0;
-    let failed = 0;
+    const fetchStats = async (a: (typeof accounts)[number]) => {
+      const stats = await emailAccountStats(a.id);
+      setStats.run(stats.bounceRate, stats.setupScore, stats.inboxScore, a.email);
+      ok++;
+    };
+    const retryLater: typeof accounts = [];
     for (const a of accounts) {
       try {
-        const stats = await emailAccountStats(a.id);
-        setStats.run(stats.bounceRate, stats.setupScore, stats.inboxScore, a.email);
-        ok++;
+        await fetchStats(a);
+      } catch {
+        retryLater.push(a);
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    let failed = 0;
+    for (const a of retryLater) {
+      try {
+        await fetchStats(a);
       } catch {
         failed++;
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 3000));
     }
     const msg = `${accounts.length} Saleshandy accounts; stats ok=${ok} failed=${failed}`;
     logSync("saleshandy", true, msg);
