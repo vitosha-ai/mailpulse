@@ -20,18 +20,34 @@ function apiKey(): string {
   return key;
 }
 
-async function call<T>(path: string, params: Record<string, string> = {}, attempt = 0): Promise<T> {
+async function call<T>(
+  path: string,
+  params: Record<string, string> = {},
+  body?: unknown,
+  attempt = 0,
+): Promise<T> {
   const qs = new URLSearchParams({ ...params, api_key: apiKey() });
-  const res = await fetch(`${BASE}${path}?${qs}`);
+  const method = body === undefined ? "GET" : "POST";
+  const res = await fetch(`${BASE}${path}?${qs}`, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (res.status === 429 && attempt < 4) {
     await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
-    return call<T>(path, params, attempt + 1);
+    return call<T>(path, params, body, attempt + 1);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new SmartleadError(res.status, `Smartlead GET ${path} → ${res.status}: ${text.slice(0, 300)}`);
+    throw new SmartleadError(res.status, `Smartlead ${method} ${path} → ${res.status}: ${text.slice(0, 300)}`);
   }
   return (await res.json()) as T;
+}
+
+// Sets the campaign sending limit. 0 = effectively paused (verified live:
+// this is how the Spamhaus-domain senders were stopped).
+export async function setMaxEmailsPerDay(accountId: string, maxPerDay: number) {
+  return call(`/email-accounts/${accountId}`, {}, { max_email_per_day: maxPerDay });
 }
 
 export type SmartleadAccount = {

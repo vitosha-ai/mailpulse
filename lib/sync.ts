@@ -36,16 +36,18 @@ export async function syncInstantly(): Promise<string> {
   const db = getDb();
   try {
     const accounts = await listAllAccounts();
+    // NOTE: Instantly is warmup/testing only — campaigns send via Smartlead/
+    // Saleshandy, so Instantly's daily_limit is deliberately NOT stored; the
+    // sequencer syncs own the daily_limit column.
     const upsert = db.prepare(`
-      INSERT INTO senders (email, domain, provider, instantly_status, warmup_status, warmup_score, daily_limit, last_synced)
-      VALUES (@email, @domain, @provider, @instantly_status, @warmup_status, @warmup_score, @daily_limit, datetime('now'))
+      INSERT INTO senders (email, domain, provider, instantly_status, warmup_status, warmup_score, last_synced)
+      VALUES (@email, @domain, @provider, @instantly_status, @warmup_status, @warmup_score, datetime('now'))
       ON CONFLICT(email) DO UPDATE SET
         domain = excluded.domain,
         provider = excluded.provider,
         instantly_status = excluded.instantly_status,
         warmup_status = excluded.warmup_status,
         warmup_score = excluded.warmup_score,
-        daily_limit = excluded.daily_limit,
         last_synced = excluded.last_synced
     `);
     const providerFromCode = (code: number): string =>
@@ -60,7 +62,6 @@ export async function syncInstantly(): Promise<string> {
           instantly_status: a.status,
           warmup_status: a.warmup_status,
           warmup_score: a.stat_warmup_score,
-          daily_limit: a.daily_limit,
         });
       }
     });
@@ -116,7 +117,7 @@ export async function syncSaleshandy(): Promise<string> {
     const update = db.prepare(`
       UPDATE senders SET
         saleshandy_id = ?, saleshandy_status = ?,
-        daily_limit = COALESCE(daily_limit, ?),
+        daily_limit = COALESCE(?, daily_limit),
         sh_used_today = ?,
         provider = CASE WHEN provider = 'other' AND ? IS NOT NULL THEN ? ELSE provider END
       WHERE email = ?
