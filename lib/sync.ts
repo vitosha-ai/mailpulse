@@ -392,7 +392,7 @@ export function rescoreAll(): string {
     const dc = domainCheck.get(domain) as Record<string, unknown> | undefined;
 
     let authScore: number | null = null;
-    let blocklisted = false;
+    let blocklistSeverity: "severe" | "moderate" | null = null;
     let blocklistNames: string[] = [];
     if (dc) {
       // DKIM detection tries a list of common selector names; providers like
@@ -403,7 +403,8 @@ export function rescoreAll(): string {
       authScore = parts.reduce((a, b) => a + b, 0) / parts.length;
       const bls = JSON.parse((dc.blocklists as string) ?? "[]") as { list: string; listed: boolean }[];
       blocklistNames = bls.filter((b) => b.listed).map((b) => b.list);
-      blocklisted = blocklistNames.length > 0;
+      if (blocklistNames.some((n) => n.includes("spamhaus"))) blocklistSeverity = "severe";
+      else if (blocklistNames.length > 0) blocklistSeverity = "moderate";
     }
 
     const score = combinedScore({
@@ -420,13 +421,13 @@ export function rescoreAll(): string {
       placementInboxRate: p?.inbox_rate ?? null,
       bounceRate: (s.bounce_rate as number) ?? null,
       authScore,
-      blocklisted,
+      blocklistSeverity,
     });
 
     const prev = scoreAgo.get(email) as { combined_score: number | null } | undefined;
     const degrading =
       score !== null && prev?.combined_score != null && prev.combined_score - score >= 10;
-    const status = healthStatus(score, blocklisted, degrading);
+    const status = healthStatus(score, blocklistSeverity, degrading);
 
     writeHistory.run(email, date, score, (s.warmup_score as number) ?? null, (s.bounce_rate as number) ?? null, status);
     setScore.run(score, status, email);
@@ -439,7 +440,7 @@ export function rescoreAll(): string {
         scoreThreeDaysAgo: prev?.combined_score ?? null,
         warmupSpamRate7d: warmupSpamRate,
         bounceRate: (s.bounce_rate as number) ?? null,
-        blocklisted,
+        blocklistSeverity,
         blocklistNames,
       }),
     );

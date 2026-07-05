@@ -13,7 +13,9 @@ export type SenderSignals = {
   placementInboxRate: number | null; // 0-100, most recent test within 14 days
   bounceRate: number | null; // percent
   authScore: number | null; // 0-100 from SPF/DKIM/DMARC
-  blocklisted: boolean;
+  // 'severe' = Spamhaus (directly used by major filters); 'moderate' = SURBL/
+  // URIBL (used by some corporate filters; a reputation warning sign).
+  blocklistSeverity: "severe" | "moderate" | null;
 };
 
 const WEIGHTS = {
@@ -40,14 +42,19 @@ export function combinedScore(s: SenderSignals): number | null {
   let score = parts.reduce((sum, p) => sum + p.value * (p.weight / totalWeight), 0);
 
   // A blocklisted domain caps the score — nothing else can compensate.
-  if (s.blocklisted) score = Math.min(score, 25);
+  if (s.blocklistSeverity === "severe") score = Math.min(score, 25);
+  else if (s.blocklistSeverity === "moderate") score = Math.min(score, 55);
   return Math.round(score * 10) / 10;
 }
 
-export function healthStatus(score: number | null, blocklisted: boolean, degrading: boolean): string {
+export function healthStatus(
+  score: number | null,
+  blocklistSeverity: "severe" | "moderate" | null,
+  degrading: boolean,
+): string {
   if (score === null) return "unknown";
-  if (blocklisted || score < 60) return "red";
-  if (score < 80 || degrading) return "yellow";
+  if (blocklistSeverity === "severe" || score < 60) return "red";
+  if (blocklistSeverity === "moderate" || score < 80 || degrading) return "yellow";
   return "green";
 }
 
@@ -67,19 +74,27 @@ export function evaluateRules(input: {
   scoreThreeDaysAgo: number | null;
   warmupSpamRate7d: number | null; // percent of warmup mail landing in spam
   bounceRate: number | null;
-  blocklisted: boolean;
+  blocklistSeverity: "severe" | "moderate" | null;
   blocklistNames: string[];
 }): AlertCandidate[] {
   const alerts: AlertCandidate[] = [];
   const { email, domain } = input;
 
-  if (input.blocklisted) {
+  if (input.blocklistSeverity === "severe") {
     alerts.push({
       target: domain,
       target_type: "domain",
       rule: "blocklist",
       severity: "critical",
-      message: `Domain ${domain} is on a blocklist (${input.blocklistNames.join(", ")}). Pause all senders on this domain.`,
+      message: `Domain ${domain} is listed on SPAMHAUS (${input.blocklistNames.join(", ")}). This directly hurts delivery to Microsoft and corporate inboxes — pause all senders on this domain and start delisting.`,
+    });
+  } else if (input.blocklistSeverity === "moderate") {
+    alerts.push({
+      target: domain,
+      target_type: "domain",
+      rule: "blocklist",
+      severity: "warn",
+      message: `Domain ${domain} is on a secondary blocklist (${input.blocklistNames.join(", ")}). Not used by Gmail/Microsoft directly, but a reputation warning — reduce volume on this domain and monitor.`,
     });
   }
   if (input.score !== null && input.scoreThreeDaysAgo !== null && input.scoreThreeDaysAgo - input.score >= 10) {
@@ -134,7 +149,9 @@ export function recordAlerts(alerts: AlertCandidate[]) {
   );
   let added = 0;
   for (const a of alerts) {
-    if (open.has(`${a.target}|${a.rule}`)) continue;
+    const key = `${a.target}|${a.rule}`;
+    if (open.has(key)) continue;
+    open.add(key); // dedupe within this batch too (e.g. many senders, one domain)
     insert.run(a.target, a.target_type, a.rule, a.severity, a.message);
     added++;
   }
