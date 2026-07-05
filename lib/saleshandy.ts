@@ -46,6 +46,7 @@ export type SaleshandyAccount = {
   status: number | null; // 1 = active (observed)
   esp: string | null; // e.g. "o365", "gmail"
   dailyLimit: number | null;
+  usedToday: number | null; // dailyLimit - available-quota
 };
 
 type RawAccount = {
@@ -68,13 +69,20 @@ export async function listAllEmailAccounts(): Promise<SaleshandyAccount[]> {
     for (const raw of items) {
       const email = String(raw.fromEmail ?? raw.email ?? "").toLowerCase();
       if (!email.includes("@")) continue;
-      const limitSetting = raw.settings?.find((s) => s.code === "daily-sending-limit");
+      const setting = (code: string) => {
+        const s = raw.settings?.find((x) => x.code === code);
+        return s ? parseInt(s.value, 10) : NaN;
+      };
+      const limit = setting("daily-sending-limit");
+      const available = setting("available-quota");
       all.push({
         id: String(raw.id),
         email,
         status: typeof raw.status === "number" ? raw.status : null,
         esp: raw.emailServiceProvider ?? null,
-        dailyLimit: limitSetting ? parseInt(limitSetting.value, 10) || null : null,
+        dailyLimit: Number.isNaN(limit) ? null : limit,
+        usedToday:
+          Number.isNaN(limit) || Number.isNaN(available) ? null : Math.max(0, limit - available),
       });
     }
     if (items.length < 100) break;

@@ -117,6 +117,7 @@ export async function syncSaleshandy(): Promise<string> {
       UPDATE senders SET
         saleshandy_id = ?, saleshandy_status = ?,
         daily_limit = COALESCE(daily_limit, ?),
+        sh_used_today = ?,
         provider = CASE WHEN provider = 'other' AND ? IS NOT NULL THEN ? ELSE provider END
       WHERE email = ?
     `);
@@ -127,7 +128,15 @@ export async function syncSaleshandy(): Promise<string> {
     for (const a of accounts) {
       insertMissing.run(a.email, domainOf(a.email), a.id);
       const prov = providerFromEsp(a.esp);
-      update.run(a.id, a.status != null ? String(a.status) : null, a.dailyLimit, prov, prov, a.email);
+      update.run(
+        a.id,
+        a.status != null ? String(a.status) : null,
+        a.dailyLimit,
+        a.usedToday,
+        prov,
+        prov,
+        a.email,
+      );
     }
 
     // Per-account stats: one call each. Saleshandy rate-limits aggressively
@@ -181,7 +190,8 @@ export async function syncSmartlead(): Promise<string> {
     const update = db.prepare(`
       UPDATE senders SET
         smartlead_id = ?, smartlead_status = ?, sl_warmup_reputation = ?,
-        sl_smtp_ok = ?, sl_imap_ok = ?
+        sl_smtp_ok = ?, sl_imap_ok = ?,
+        daily_limit = COALESCE(?, daily_limit)
       WHERE email = ?
     `);
     const flag = (v: boolean | null) => (v === null ? null : v ? 1 : 0);
@@ -195,6 +205,7 @@ export async function syncSmartlead(): Promise<string> {
         a.warmupReputation,
         flag(a.smtpOk),
         flag(a.imapOk),
+        a.messagePerDay,
         a.email,
       );
       // Smartlead silently skips disconnected senders in campaigns — surface it loudly.
@@ -462,7 +473,10 @@ export function rescoreAll(): string {
   for (const s of senders) {
     const email = s.email as string;
     const warmupSent = (lastWarmupSent.get(email) as { sent: number } | undefined)?.sent ?? 0;
-    const combined = warmupSent + ((s.daily_limit as number) ?? 0);
+    // Prefer measured campaign volume (Saleshandy used-today) over the
+    // worst-case assumption that the full daily limit gets used.
+    const campaign = (s.sh_used_today as number) ?? (s.daily_limit as number) ?? 0;
+    const combined = warmupSent + campaign;
     setVolume.run(combined, email);
     if (combined > VOLUME_CEILING) offenders.push({ email, combined });
   }
