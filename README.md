@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MailPulse — sender health monitor
 
-## Getting Started
+MailPulse watches the health of our ~900 cold-email sender mailboxes and warns us **before** a sender starts landing in spam — so we never waste prospects or burn domains on a bad mailbox. It pulls data automatically from the tools we already use (Instantly, Smartlead, Saleshandy, TrulyInbox) plus public DNS/blocklist checks, and turns it into one score per sender.
 
-First, run the development server:
+## Starting the app
 
-```bash
+```
+cd C:\mailpulse
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open **http://localhost:3000** in your browser. All data stays on this machine.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## The 5-minute daily routine
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Click **⟳ Sync now** (top right) and wait for it to finish (a few minutes).
+2. Look at the **alerts panel** — handle anything red/critical first. Each alert says what happened and what to do.
+3. Click the **Critical** and **Degrading** cards to filter to problem senders.
+4. Use the **Action** column — it says `✓ keep going`, `↓ slow down`, or `⏸ pause now` per sender.
+5. To act: tick the checkboxes → use **Pause / Resume / Set limit…** in the black bar. Changes are pushed to the sending tools automatically.
 
-## Learn More
+## Reading the table
 
-To learn more about Next.js, take a look at the following resources:
+| Column | Meaning |
+|---|---|
+| **Score** | Overall health 0–100. **80+ green** = healthy · **60–79 yellow** = watch it · **below 60 red** = stop sending |
+| **Warmup** | Warmup health from Instantly / Smartlead / TrulyInbox (0–100) |
+| **Bounce** | % of campaign emails bouncing (from Saleshandy). Over 3% = problem |
+| **Gmail / Microsoft** | Latest real placement-test verdict at that provider (inbox or spam) |
+| **Auth** | ✓✓✓ = SPF / DKIM / DMARC records OK. Any ✗ = quick DNS fix needed |
+| **Limit** | Max emails/day this mailbox may send |
+| **Action** | What to do with this sender right now |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A **BLOCKLISTED** badge means the sender's domain is on a spam blocklist:
+- **Spamhaus listing → red/critical.** Pause its senders, look the domain up at check.spamhaus.org, consider replacing the domain.
+- **Secondary list (SURBL etc.) → yellow/warning.** Reduce volume, monitor, raise with the domain provider (e.g. Maildoso).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Common alerts and responses
 
-## Deploy on Vercel
+- **"warmup mail landed in spam"** — sender is degrading. Slow it down (Set limit…) and watch for a few days.
+- **"health score dropped N points"** — same treatment; the trend matters more than the number.
+- **"disconnected in Smartlead / TrulyInbox error"** — the tool silently stopped using this mailbox. Reconnect it in that tool.
+- **"exceed 30/day total policy"** — campaign limit + warmup sends together exceed our 30/day-per-mailbox policy. Lower one of them.
+- **"domain is listed on SPAMHAUS"** — pause all senders on that domain immediately (see above).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Buttons worth knowing
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **▶ Placement test (next 50)** — sends real test emails from the 50 least-recently-tested senders to seed inboxes and records inbox/spam per provider. Requires the Instantly Inbox Placement add-on ($47/mo); covers Instantly-connected (Maildoso) senders.
+- **⤓ Export pause list** — CSV of all yellow/red senders, e.g. for a Maildoso support ticket.
+- **⚙ Settings** — API keys for Instantly, Saleshandy, Smartlead, TrulyInbox, Spamhaus. Keys are stored only on this machine and shown masked.
+
+## What runs where (for context)
+
+- **Instantly** warms the Maildoso mailboxes and runs placement tests.
+- **Smartlead** sequences + warms the non-Maildoso mailboxes.
+- **Saleshandy** sequences; its mailboxes warm in **TrulyInbox**.
+- MailPulse only *reads* from all of them — except the explicit Pause/Resume/Set-limit actions you trigger.
