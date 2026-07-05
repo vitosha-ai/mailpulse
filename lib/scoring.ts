@@ -42,8 +42,10 @@ export function combinedScore(s: SenderSignals): number | null {
   let score = parts.reduce((sum, p) => sum + p.value * (p.weight / totalWeight), 0);
 
   // A blocklisted domain caps the score — nothing else can compensate.
+  // Moderate cap sits above the red threshold (60) on purpose: a secondary
+  // blocklist listing means "yellow — reduce and monitor", not "pause now".
   if (s.blocklistSeverity === "severe") score = Math.min(score, 25);
-  else if (s.blocklistSeverity === "moderate") score = Math.min(score, 55);
+  else if (s.blocklistSeverity === "moderate") score = Math.min(score, 70);
   return Math.round(score * 10) / 10;
 }
 
