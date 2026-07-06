@@ -7,14 +7,22 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Read the live input value — browser autofill can populate the field
+    // without React noticing.
+    const field = e.currentTarget.elements.namedItem("password") as HTMLInputElement | null;
+    const value = field?.value ?? password;
+    if (!value) {
+      setError("Type the team password first.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password: value }),
     });
     if (res.ok) {
       window.location.href = "/";
@@ -44,6 +52,7 @@ export default function Login() {
         </label>
         <input
           type="password"
+          name="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoFocus
@@ -52,7 +61,7 @@ export default function Login() {
         {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
         <button
           type="submit"
-          disabled={busy || !password}
+          disabled={busy}
           className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.35)] transition hover:shadow-[0_0_26px_rgba(34,211,238,0.55)] disabled:opacity-40"
         >
           {busy ? "Checking…" : "Enter"}
