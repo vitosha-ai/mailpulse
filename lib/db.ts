@@ -136,6 +136,10 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN ti_score REAL",
     "ALTER TABLE senders ADD COLUMN est_daily_volume REAL",
     "ALTER TABLE senders ADD COLUMN sh_used_today INTEGER",
+    "ALTER TABLE senders ADD COLUMN campaigns TEXT", // JSON [{id,name,status}] from the sender's sequencer
+    "ALTER TABLE senders ADD COLUMN retire_requested TEXT", // timestamp when user asked for graceful pause
+    "ALTER TABLE senders ADD COLUMN sh_zero_days INTEGER DEFAULT 0",
+    "ALTER TABLE senders ADD COLUMN sh_zero_checked TEXT", // date of last zero-day increment
   ];
   for (const stmt of addColumns) {
     try {

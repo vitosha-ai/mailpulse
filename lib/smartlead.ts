@@ -50,6 +50,35 @@ export async function setMaxEmailsPerDay(accountId: string, maxPerDay: number) {
   return call(`/email-accounts/${accountId}`, {}, { max_email_per_day: maxPerDay });
 }
 
+export type SmartleadCampaign = { id: string; name: string | null; status: string | null };
+
+export async function listCampaigns(): Promise<SmartleadCampaign[]> {
+  const data = await call<unknown>("/campaigns");
+  const items = (Array.isArray(data) ? data : ((data as Record<string, unknown>).data ?? [])) as Record<
+    string,
+    unknown
+  >[];
+  return items
+    .filter((c) => c.id != null)
+    .map((c) => ({
+      id: String(c.id),
+      name: c.name != null ? String(c.name) : null,
+      status: c.status != null ? String(c.status) : null,
+    }));
+}
+
+// Emails of the sender accounts attached to a campaign.
+export async function campaignAccountEmails(campaignId: string): Promise<string[]> {
+  const data = await call<unknown>(`/campaigns/${campaignId}/email-accounts`);
+  const items = (Array.isArray(data) ? data : ((data as Record<string, unknown>).data ?? [])) as Record<
+    string,
+    unknown
+  >[];
+  return items
+    .map((a) => String(a.from_email ?? a.email ?? "").toLowerCase())
+    .filter((e) => e.includes("@"));
+}
+
 export type SmartleadAccount = {
   id: string | number;
   email: string;

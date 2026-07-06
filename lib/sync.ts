@@ -1,7 +1,12 @@
 import { getDb } from "./db";
 import { listAllAccounts, warmupAnalytics } from "./instantly";
 import { listAllEmailAccounts, emailAccountStats, providerFromEsp } from "./saleshandy";
-import { listAllAccounts as listSmartleadAccounts } from "./smartlead";
+import {
+  listAllAccounts as listSmartleadAccounts,
+  listCampaigns,
+  campaignAccountEmails,
+  setMaxEmailsPerDay,
+} from "./smartlead";
 import { listAllAccounts as listTrulyInboxAccounts, bulkReports } from "./trulyinbox";
 import { checkDomain } from "./dnschecks";
 import { combinedScore, healthStatus, evaluateRules, recordAlerts, type AlertCandidate } from "./scoring";
@@ -126,6 +131,18 @@ export async function syncSaleshandy(): Promise<string> {
       INSERT OR IGNORE INTO senders (email, domain, provider, saleshandy_id, last_synced)
       VALUES (?, ?, 'other', ?, datetime('now'))
     `);
+    const setCampaigns = db.prepare("UPDATE senders SET campaigns = ? WHERE email = ?");
+    // Consecutive zero-send days (drain detection for retiring senders).
+    // Incremented at most once per calendar day even if sync runs repeatedly.
+    const bumpZero = db.prepare(`
+      UPDATE senders SET
+        sh_zero_days = COALESCE(sh_zero_days, 0) + 1,
+        sh_zero_checked = date('now')
+      WHERE email = ? AND (sh_zero_checked IS NULL OR sh_zero_checked < date('now'))
+    `);
+    const resetZero = db.prepare(
+      "UPDATE senders SET sh_zero_days = 0, sh_zero_checked = date('now') WHERE email = ?",
+    );
     for (const a of accounts) {
       insertMissing.run(a.email, domainOf(a.email), a.id);
       const prov = providerFromEsp(a.esp);
@@ -138,6 +155,11 @@ export async function syncSaleshandy(): Promise<string> {
         prov,
         a.email,
       );
+      if (a.sequences.length > 0) setCampaigns.run(JSON.stringify(a.sequences), a.email);
+      if (a.usedToday !== null) {
+        if (a.usedToday > 0) resetZero.run(a.email);
+        else bumpZero.run(a.email);
+      }
     }
 
     // Per-account stats: one call each. Saleshandy rate-limits aggressively
@@ -220,6 +242,29 @@ export async function syncSmartlead(): Promise<string> {
         });
       }
     }
+    // Campaign membership per sender — needed for graceful retirement
+    // ("pause only when its campaigns are done") and impact insight.
+    try {
+      const campaigns = await listCampaigns();
+      const byEmail = new Map<string, { id: string; name: string | null; status: string | null }[]>();
+      for (const c of campaigns) {
+        const emails = await campaignAccountEmails(c.id).catch(() => []);
+        for (const e of emails) {
+          const list = byEmail.get(e) ?? [];
+          list.push(c);
+          byEmail.set(e, list);
+        }
+        await new Promise((r) => setTimeout(r, 300)); // Smartlead rate limit
+      }
+      const setCampaigns = db.prepare("UPDATE senders SET campaigns = ? WHERE email = ?");
+      const tx = db.transaction(() => {
+        for (const [email, list] of byEmail) setCampaigns.run(JSON.stringify(list), email);
+      });
+      tx();
+    } catch {
+      // Campaign mapping is best-effort; account data above already saved.
+    }
+
     const added = recordAlerts(alerts);
     const msg = `${accounts.length} Smartlead accounts synced, ${added} disconnect alert(s)`;
     logSync("smartlead", true, msg);
@@ -503,12 +548,78 @@ export function rescoreAll(): string {
   return msg;
 }
 
+// Graceful retirement: senders flagged via the Retire action get fully paused
+// once their campaigns finish (Smartlead) or their send queue drains
+// (Saleshandy — no pause API, so we alert instead).
+export async function processRetirements(): Promise<string> {
+  const db = getDb();
+  const retiring = db
+    .prepare(
+      "SELECT email, smartlead_id, saleshandy_id, campaigns, sh_zero_days FROM senders WHERE retire_requested IS NOT NULL",
+    )
+    .all() as {
+    email: string;
+    smartlead_id: string | null;
+    saleshandy_id: string | null;
+    campaigns: string | null;
+    sh_zero_days: number | null;
+  }[];
+  if (retiring.length === 0) return "no senders retiring";
+
+  const DONE_STATUSES = new Set(["COMPLETED", "STOPPED", "FINISHED"]);
+  const finish = db.prepare(
+    "UPDATE senders SET retire_requested = NULL, daily_limit = 0 WHERE email = ?",
+  );
+  const alerts: AlertCandidate[] = [];
+  let retired = 0;
+
+  for (const s of retiring) {
+    if (s.smartlead_id) {
+      const campaigns = JSON.parse(s.campaigns ?? "[]") as { status: string | null }[];
+      const allDone =
+        campaigns.length > 0 &&
+        campaigns.every((c) => c.status && DONE_STATUSES.has(c.status.toUpperCase()));
+      if (!allDone) continue;
+      try {
+        await setMaxEmailsPerDay(s.smartlead_id, 0);
+        finish.run(s.email);
+        retired++;
+        alerts.push({
+          target: s.email,
+          target_type: "sender",
+          rule: "retired",
+          severity: "warn",
+          message: `${s.email}: all its campaigns finished — sender has been fully paused as requested (graceful retirement complete).`,
+        });
+      } catch {
+        // Retry next sync.
+      }
+    } else if (s.saleshandy_id) {
+      if ((s.sh_zero_days ?? 0) < 3) continue;
+      finish.run(s.email);
+      retired++;
+      alerts.push({
+        target: s.email,
+        target_type: "sender",
+        rule: "retired",
+        severity: "warn",
+        message: `${s.email}: no campaign sends for 3+ days — its queue looks drained. Saleshandy has no pause API, so pause this mailbox in Saleshandy's UI now.`,
+      });
+    }
+  }
+  recordAlerts(alerts);
+  const msg = `${retiring.length} retiring, ${retired} completed retirement`;
+  logSync("retirements", true, msg);
+  return msg;
+}
+
 export async function fullSync(): Promise<SyncReport> {
   const instantly = await syncInstantly();
   const saleshandy = await syncSaleshandy();
   const smartlead = await syncSmartlead();
   const trulyinbox = await syncTrulyInbox();
   const domains = await syncDomains();
+  await processRetirements();
   const scoring = rescoreAll();
   logSync("full", true, "full sync complete");
   return { instantly, saleshandy, smartlead, trulyinbox, domains, scoring };

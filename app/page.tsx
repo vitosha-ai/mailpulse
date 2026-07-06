@@ -13,6 +13,7 @@ type Sender = {
   bounce_rate: number | null;
   combined_score: number | null;
   health_status: string;
+  retire_requested: string | null;
   spf_ok: number | null;
   dkim_ok: number | null;
   dmarc_ok: number | null;
@@ -443,6 +444,13 @@ export default function Dashboard() {
                 ⏸ Pause
               </button>
               <button
+                onClick={() => doAction("retire")}
+                title="Graceful pause: keeps follow-ups flowing at 10/day, then fully pauses once this sender's campaigns finish"
+                className="rounded-md bg-sky-500/90 px-2.5 py-1 text-xs font-bold text-slate-950 transition hover:bg-sky-400"
+              >
+                ◐ Retire
+              </button>
+              <button
                 onClick={() => doAction("resume")}
                 className="rounded-md bg-emerald-500/90 px-2.5 py-1 text-xs font-bold text-slate-950 transition hover:bg-emerald-400"
               >
@@ -519,6 +527,14 @@ export default function Dashboard() {
                         {s.instantly_status === 2 && (
                           <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
                             PAUSED
+                          </span>
+                        )}
+                        {s.retire_requested && (
+                          <span
+                            title="Graceful pause in progress: follow-ups still flowing; fully pauses when its campaigns finish"
+                            className="rounded-md bg-sky-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/40"
+                          >
+                            RETIRING
                           </span>
                         )}
                       </div>

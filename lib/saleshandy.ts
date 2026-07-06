@@ -47,6 +47,7 @@ export type SaleshandyAccount = {
   esp: string | null; // e.g. "o365", "gmail"
   dailyLimit: number | null;
   usedToday: number | null; // dailyLimit - available-quota
+  sequences: { id: string; name: string | null; status: string | null }[];
 };
 
 type RawAccount = {
@@ -56,6 +57,7 @@ type RawAccount = {
   status?: number;
   emailServiceProvider?: string;
   settings?: { code: string; value: string }[];
+  sequences?: { id: string | number; title?: string }[];
 };
 
 export async function listAllEmailAccounts(): Promise<SaleshandyAccount[]> {
@@ -83,6 +85,11 @@ export async function listAllEmailAccounts(): Promise<SaleshandyAccount[]> {
         dailyLimit: Number.isNaN(limit) ? null : limit,
         usedToday:
           Number.isNaN(limit) || Number.isNaN(available) ? null : Math.max(0, limit - available),
+        sequences: (raw.sequences ?? []).map((s) => ({
+          id: String(s.id),
+          name: s.title ?? null,
+          status: null, // Saleshandy's account list does not expose sequence status
+        })),
       });
     }
     if (items.length < 100) break;

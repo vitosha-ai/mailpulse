@@ -14,6 +14,7 @@ import { setMaxEmailsPerDay } from "@/lib/smartlead";
 //   - neither (warmup-only mailboxes) → falls back to the Instantly account
 // warmup-on / warmup-off always act on Instantly.
 const DEFAULT_RESUME_LIMIT = 30;
+const DRAIN_LIMIT = 10; // retiring senders keep sending follow-ups at this trickle
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
@@ -31,6 +32,10 @@ export async function POST(request: NextRequest) {
   const getSender = db.prepare("SELECT smartlead_id, saleshandy_id FROM senders WHERE email = ?");
   const setLocal = db.prepare("UPDATE senders SET daily_limit = ? WHERE email = ?");
   const setStatus = db.prepare("UPDATE senders SET instantly_status = ? WHERE email = ?");
+  const setRetire = db.prepare(
+    "UPDATE senders SET retire_requested = datetime('now') WHERE email = ?",
+  );
+  const clearRetire = db.prepare("UPDATE senders SET retire_requested = NULL WHERE email = ?");
 
   const act = async (email: string): Promise<string> => {
     const sender = getSender.get(email) as
@@ -53,6 +58,7 @@ export async function POST(request: NextRequest) {
       }
       case "resume": {
         const limit = typeof body.value === "number" && body.value > 0 ? body.value : DEFAULT_RESUME_LIMIT;
+        clearRetire.run(email); // resuming cancels a pending retirement
         if (sender?.smartlead_id) {
           await setMaxEmailsPerDay(sender.smartlead_id, limit);
           setLocal.run(limit, email);
@@ -63,6 +69,25 @@ export async function POST(request: NextRequest) {
         }
         await resumeAccount(email);
         setStatus.run(1, email);
+        return "instantly";
+      }
+      case "retire": {
+        // Graceful pause: throttle to a follow-ups-only trickle now; the daily
+        // sync fully pauses once the sender's campaigns finish (Smartlead) or
+        // its queue drains (Saleshandy → alert, no API).
+        if (sender?.smartlead_id) {
+          await setMaxEmailsPerDay(sender.smartlead_id, DRAIN_LIMIT);
+          setLocal.run(DRAIN_LIMIT, email);
+          setRetire.run(email);
+          return "smartlead (draining)";
+        }
+        if (sender?.saleshandy_id) {
+          setRetire.run(email);
+          return "saleshandy (watching for queue drain — you'll get an alert when it's safe to pause)";
+        }
+        // Warmup-only mailbox: nothing in flight, pause immediately.
+        await pauseAccount(email);
+        setStatus.run(2, email);
         return "instantly";
       }
       case "set-limit": {
