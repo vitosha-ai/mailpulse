@@ -43,6 +43,13 @@ A **BLOCKLISTED** badge means the sender's domain is on a spam blocklist:
 - **"exceed 30/day total policy"** — campaign limit + warmup sends together exceed our 30/day-per-mailbox policy. Lower one of them.
 - **"domain is listed on SPAMHAUS"** — pause all senders on that domain immediately (see above).
 
+## Pause vs. Retire (important distinction)
+
+- **⏸ Pause** — stops the sender immediately. Its prospects mid-sequence stall until you resume (follow-ups are never handed to other mailboxes — that's how Smartlead/Saleshandy work by design).
+- **◐ Retire** — the graceful version: throttles the sender to 10 emails/day so existing conversations get their follow-ups (Smartlead documentedly prioritizes follow-ups over new leads), then **auto-pauses fully once all its campaigns finish**. Saleshandy senders instead get watched until their queue drains 3 days, then an alert says it's safe to pause manually.
+- Caveat: in evergreen campaigns (new leads added forever), Retire never auto-completes — the 10/day trickle is the protection. And a retiring sender can still pick up a few new leads once its follow-up backlog shrinks; fully preventing that is only possible at campaign level.
+- Never remove a mailbox from a campaign as a way to pause it — Smartlead permanently strands its mid-sequence prospects (documented).
+
 ## Buttons worth knowing
 
 - **▶ Placement test (next 50)** — sends real test emails from the 50 least-recently-tested senders to seed inboxes and records inbox/spam per provider. Requires the Instantly Inbox Placement add-on ($47/mo); covers Instantly-connected (Maildoso) senders.
