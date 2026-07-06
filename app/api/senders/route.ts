@@ -11,15 +11,15 @@ export async function GET(request: NextRequest) {
   const where: string[] = [];
   const params: unknown[] = [];
   if (status) {
-    where.push("health_status = ?");
+    where.push("s.health_status = ?");
     params.push(status);
   }
   if (provider) {
-    where.push("provider = ?");
+    where.push("s.provider = ?");
     params.push(provider);
   }
   if (q) {
-    where.push("(email LIKE ? OR domain LIKE ?)");
+    where.push("(s.email LIKE ? OR s.domain LIKE ?)");
     params.push(`%${q}%`, `%${q}%`);
   }
 
