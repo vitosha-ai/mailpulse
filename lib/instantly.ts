@@ -117,11 +117,19 @@ export async function disableWarmup(emails: string[]) {
 // ---- Inbox placement tests (requires the Inbox Placement add-on plan) ----
 
 export async function createPlacementTest(name: string, emails: string[]) {
-  // type 1 = one-time test. The app schedules its own recurring batches, so
-  // the cheaper add-on tier (one-time tests only) is sufficient.
-  return call<{ id: string }>("POST", "/inbox-placement-tests", {
+  // Schema verified live 2026-07-07: type 1 = one-time test (the app
+  // schedules its own recurring batches, so the cheaper add-on tier
+  // suffices); sending_method 1 + delivery_mode 1 = send from connected
+  // accounts. Subject/body are what the seed inboxes receive — kept plain
+  // and business-like on purpose.
+  return call<{ id: string; recipients?: string[] }>("POST", "/inbox-placement-tests", {
     name,
     type: 1,
+    sending_method: 1,
+    delivery_mode: 1,
+    email_subject: "Quick question about next week's schedule",
+    email_body:
+      "Hi,\n\nJust checking whether Tuesday or Wednesday works better on your side for a short call next week. Either afternoon is fine for us.\n\nBest regards,\nOperations Team",
     emails,
   });
 }
