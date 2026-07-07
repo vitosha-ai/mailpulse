@@ -127,6 +127,12 @@ export async function createPlacementTest(name: string, emails: string[]) {
     type: 1,
     sending_method: 1,
     delivery_mode: 1,
+    run_immediately: true,
+    // Judge at BOTH providers (options from GET .../email-service-provider-options).
+    recipients_labels: [
+      { region: "North America", sub_region: "US", type: "Professional", esp: "Google" },
+      { region: "North America", sub_region: "US", type: "Professional", esp: "Outlook" },
+    ],
     email_subject: "Quick question about next week's schedule",
     email_body:
       "Hi,\n\nJust checking whether Tuesday or Wednesday works better on your side for a short call next week. Either afternoon is fine for us.\n\nBest regards,\nOperations Team",
@@ -143,4 +149,31 @@ export async function getPlacementAnalytics(testId: string) {
   return call<Record<string, unknown>>("POST", "/inbox-placement-analytics/stats-by-test-id", {
     test_ids: [testId],
   });
+}
+
+export type PlacementRecord = {
+  sender_email: string;
+  recipient_email: string;
+  is_spam: boolean;
+  spf_pass: boolean | null;
+  dkim_pass: boolean | null;
+  dmarc_pass: boolean | null;
+};
+
+// One row per sender→seed judgment (live-verified shape, July 2026).
+export async function listPlacementRecords(testId: string): Promise<PlacementRecord[]> {
+  const all: PlacementRecord[] = [];
+  let startingAfter: string | undefined;
+  for (let page = 0; page < 50; page++) {
+    const qs = new URLSearchParams({ test_id: testId, limit: "100" });
+    if (startingAfter) qs.set("starting_after", startingAfter);
+    const data = await call<{ items: PlacementRecord[]; next_starting_after?: string }>(
+      "GET",
+      `/inbox-placement-analytics?${qs}`,
+    );
+    all.push(...(data.items ?? []));
+    if (!data.next_starting_after || (data.items ?? []).length === 0) break;
+    startingAfter = data.next_starting_after;
+  }
+  return all;
 }

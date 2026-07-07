@@ -1,8 +1,9 @@
+import { Resolver } from "node:dns/promises";
 import { getDb } from "./db";
-import { createPlacementTest, getPlacementAnalytics, getPlacementTest } from "./instantly";
+import { createPlacementTest, getPlacementTest, listPlacementRecords } from "./instantly";
 
-// Placement test orchestration. Senders are tested in batches, oldest-tested
-// first, so a weekly cadence naturally rotates through the whole fleet.
+// Placement test orchestration. Senders are tested in batches, and results
+// are parsed from Instantly's per-judgment records (live-verified shape).
 
 // Domain reputation dominates placement (DKIM/blocklists/filter history are
 // per-domain), so coverage beats redundancy: pick at most ONE mailbox per
@@ -46,10 +47,30 @@ export async function startPlacementBatch(emails: string[]): Promise<number> {
   return Number(info.lastInsertRowid);
 }
 
-// Poll running tests; when analytics come back, store raw JSON and extract
-// per-sender verdicts as tolerantly as possible (the exact response shape is
-// only verifiable with a live key, so parsing failures never lose data — the
-// raw payload is always kept).
+// Seed inboxes live on arbitrary domains; classify each seed's provider by
+// its MX records (cached per domain).
+const mxResolver = new Resolver();
+mxResolver.setServers(["8.8.8.8", "1.1.1.1"]);
+const seedProviderCache = new Map<string, "google" | "microsoft" | "other">();
+
+async function seedProvider(email: string): Promise<"google" | "microsoft" | "other"> {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  const cached = seedProviderCache.get(domain);
+  if (cached) return cached;
+  let result: "google" | "microsoft" | "other" = "other";
+  try {
+    const mx = (await mxResolver.resolveMx(domain)).map((m) => m.exchange).join(" ").toLowerCase();
+    if (mx.includes("google")) result = "google";
+    else if (mx.includes("outlook") || mx.includes("microsoft")) result = "microsoft";
+  } catch {
+    // leave as other
+  }
+  seedProviderCache.set(domain, result);
+  return result;
+}
+
+// Poll running tests; when a test leaves status 1 (running), pull its
+// judgment records and store per-sender verdicts.
 export async function pollPlacementTests(): Promise<string> {
   const db = getDb();
   const running = db
@@ -61,15 +82,46 @@ export async function pollPlacementTests(): Promise<string> {
   for (const t of running) {
     try {
       const test = await getPlacementTest(t.instantly_test_id);
-      const status = String((test as { status?: unknown }).status ?? "").toLowerCase();
-      // Consider it done when the test object reports completion, or just try
-      // analytics — absence of data keeps it 'running'.
-      const analytics = await getPlacementAnalytics(t.instantly_test_id).catch(() => null);
-      if (!analytics && !["completed", "done", "2"].includes(status)) continue;
+      const status = Number((test as { status?: unknown }).status ?? 1);
+      if (status === 1) continue; // still running
 
-      db.prepare("UPDATE placement_tests SET raw_results = ?, status = 'done', completed_at = datetime('now') WHERE id = ?")
-        .run(JSON.stringify(analytics ?? test), t.id);
-      extractVerdicts(t.id, analytics ?? test);
+      const records = await listPlacementRecords(t.instantly_test_id);
+      const insert = db.prepare(`
+        INSERT INTO placement_results (email, test_id, tested_at, google_verdict, microsoft_verdict, inbox_rate)
+        VALUES (?, ?, datetime('now'), ?, ?, ?)
+        ON CONFLICT(email, test_id) DO UPDATE SET
+          google_verdict = excluded.google_verdict,
+          microsoft_verdict = excluded.microsoft_verdict,
+          inbox_rate = excluded.inbox_rate
+      `);
+
+      type Agg = { inbox: number; spam: number; google: string | null; microsoft: string | null };
+      const bySender = new Map<string, Agg>();
+      for (const r of records) {
+        const sender = r.sender_email.toLowerCase();
+        const agg = bySender.get(sender) ?? { inbox: 0, spam: 0, google: null, microsoft: null };
+        if (r.is_spam) agg.spam++;
+        else agg.inbox++;
+        const provider = await seedProvider(r.recipient_email);
+        if (provider === "google" || provider === "microsoft") {
+          // Any spam judgment at a provider marks the sender spam there.
+          const verdict = r.is_spam ? "spam" : "inbox";
+          if (agg[provider] !== "spam") agg[provider] = verdict;
+        }
+        bySender.set(sender, agg);
+      }
+
+      const tx = db.transaction(() => {
+        for (const [sender, agg] of bySender) {
+          const total = agg.inbox + agg.spam;
+          const rate = total > 0 ? Math.round((agg.inbox / total) * 1000) / 10 : null;
+          insert.run(sender, t.id, agg.google, agg.microsoft, rate);
+        }
+        db.prepare(
+          "UPDATE placement_tests SET raw_results = ?, status = 'done', completed_at = datetime('now') WHERE id = ?",
+        ).run(JSON.stringify({ recordCount: records.length, instantlyStatus: status }), t.id);
+      });
+      tx();
       completed++;
     } catch {
       // Leave as running; next poll retries. Tests older than 3 days flip to error.
@@ -79,76 +131,4 @@ export async function pollPlacementTests(): Promise<string> {
     }
   }
   return `${completed}/${running.length} placement tests completed`;
-}
-
-// Best-effort extraction: walks the analytics payload looking for per-email
-// entries with provider-level inbox/spam placement.
-function extractVerdicts(testId: number, payload: unknown) {
-  const db = getDb();
-  const emails = new Set(
-    (JSON.parse(
-      (db.prepare("SELECT emails FROM placement_tests WHERE id = ?").get(testId) as { emails: string })
-        .emails,
-    ) as string[]).map((e) => e.toLowerCase()),
-  );
-
-  const insert = db.prepare(`
-    INSERT INTO placement_results (email, test_id, tested_at, google_verdict, microsoft_verdict, inbox_rate)
-    VALUES (?, ?, datetime('now'), ?, ?, ?)
-    ON CONFLICT(email, test_id) DO UPDATE SET
-      google_verdict = excluded.google_verdict,
-      microsoft_verdict = excluded.microsoft_verdict,
-      inbox_rate = excluded.inbox_rate
-  `);
-
-  type Verdicts = { google?: string; microsoft?: string; inbox?: number; total?: number };
-  const found = new Map<string, Verdicts>();
-
-  const visit = (node: unknown, contextEmail: string | null) => {
-    if (Array.isArray(node)) {
-      for (const item of node) visit(item, contextEmail);
-      return;
-    }
-    if (node === null || typeof node !== "object") return;
-    const obj = node as Record<string, unknown>;
-
-    // Detect an email key on this object.
-    let email = contextEmail;
-    for (const k of ["email", "sender", "account", "from_email", "eaccount"]) {
-      const v = obj[k];
-      if (typeof v === "string" && emails.has(v.toLowerCase())) {
-        email = v.toLowerCase();
-        break;
-      }
-    }
-
-    if (email) {
-      const v = found.get(email) ?? {};
-      const provider = String(obj.provider ?? obj.esp ?? obj.seed_provider ?? "").toLowerCase();
-      const folder = String(obj.folder ?? obj.placement ?? obj.landed ?? "").toLowerCase();
-      if (provider && folder) {
-        const verdict = folder.includes("spam") || folder.includes("junk") ? "spam" : folder.includes("inbox") ? "inbox" : folder || "unknown";
-        if (provider.includes("google") || provider.includes("gmail")) v.google = verdict;
-        if (provider.includes("microsoft") || provider.includes("outlook") || provider.includes("office")) v.microsoft = verdict;
-        v.total = (v.total ?? 0) + 1;
-        if (verdict === "inbox") v.inbox = (v.inbox ?? 0) + 1;
-      }
-      // Direct rate fields, if the API provides aggregates.
-      for (const k of ["inbox_rate", "inboxRate", "deliverability_score"]) {
-        if (typeof obj[k] === "number") {
-          v.inbox = obj[k] as number;
-          v.total = 100;
-        }
-      }
-      found.set(email, v);
-    }
-
-    for (const value of Object.values(obj)) visit(value, email);
-  };
-  visit(payload, null);
-
-  for (const [email, v] of found) {
-    const rate = v.total ? Math.round(((v.inbox ?? 0) / v.total) * 1000) / 10 : null;
-    insert.run(email, testId, v.google ?? null, v.microsoft ?? null, rate);
-  }
 }
