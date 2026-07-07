@@ -139,7 +139,8 @@ export async function getPlacementTest(id: string) {
 }
 
 export async function getPlacementAnalytics(testId: string) {
+  // Live-verified: endpoint expects test_ids as an array.
   return call<Record<string, unknown>>("POST", "/inbox-placement-analytics/stats-by-test-id", {
-    test_id: testId,
+    test_ids: [testId],
   });
 }
