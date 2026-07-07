@@ -4,15 +4,32 @@ import { createPlacementTest, getPlacementAnalytics, getPlacementTest } from "./
 // Placement test orchestration. Senders are tested in batches, oldest-tested
 // first, so a weekly cadence naturally rotates through the whole fleet.
 
+// Domain reputation dominates placement (DKIM/blocklists/filter history are
+// per-domain), so coverage beats redundancy: pick at most ONE mailbox per
+// domain per batch — the least-recently-tested mailbox of the
+// least-recently-tested domain — and only top up with same-domain repeats
+// when there are fewer untested domains than batch slots.
 export function pickSendersForTest(batchSize: number): string[] {
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT s.email,
-              (SELECT MAX(tested_at) FROM placement_results pr WHERE pr.email = s.email) AS last_tested
-       FROM senders s
-       WHERE s.instantly_status = 1
-       ORDER BY last_tested IS NOT NULL, last_tested ASC
+      `SELECT email FROM (
+         SELECT s.email, s.domain,
+                (SELECT MAX(tested_at) FROM placement_results pr WHERE pr.email = s.email) AS mailbox_tested,
+                (SELECT MAX(tested_at) FROM placement_results pr
+                   JOIN senders s2 ON s2.email = pr.email
+                  WHERE s2.domain = s.domain) AS domain_tested,
+                ROW_NUMBER() OVER (
+                  PARTITION BY s.domain
+                  ORDER BY (SELECT MAX(tested_at) FROM placement_results pr WHERE pr.email = s.email) ASC NULLS FIRST,
+                           s.email
+                ) AS rank_in_domain
+         FROM senders s
+         WHERE s.instantly_status = 1
+       )
+       ORDER BY rank_in_domain ASC,
+                domain_tested IS NOT NULL, domain_tested ASC,
+                mailbox_tested IS NOT NULL, mailbox_tested ASC
        LIMIT ?`,
     )
     .all(batchSize) as { email: string }[];
