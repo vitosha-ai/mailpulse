@@ -75,7 +75,16 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [providerFilter, setProviderFilter] = useState("");
+  const [domainFilter, setDomainFilter] = useState("");
+  const [scoreFilter, setScoreFilter] = useState("");
+  const [warmupFilter, setWarmupFilter] = useState("");
+  const [issueFilter, setIssueFilter] = useState("");
+  const [blocklistedOnly, setBlocklistedOnly] = useState(false);
+  const [sort, setSort] = useState("");
+  const [dir, setDir] = useState("desc");
   const [search, setSearch] = useState("");
+  const [domains, setDomains] = useState<{ domain: string; n: number }[]>([]);
+  const [matched, setMatched] = useState<number>(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -85,6 +94,15 @@ export default function Dashboard() {
     const qs = new URLSearchParams();
     if (statusFilter) qs.set("status", statusFilter);
     if (providerFilter) qs.set("provider", providerFilter);
+    if (domainFilter) qs.set("domain", domainFilter);
+    if (scoreFilter) qs.set("score", scoreFilter);
+    if (warmupFilter) qs.set("warmup", warmupFilter);
+    if (issueFilter) qs.set("issue", issueFilter);
+    if (blocklistedOnly) qs.set("blocklisted", "1");
+    if (sort) {
+      qs.set("sort", sort);
+      qs.set("dir", dir);
+    }
     if (search) qs.set("q", search);
     const [sRes, aRes] = await Promise.all([
       fetch(`/api/senders?${qs}`),
@@ -94,8 +112,10 @@ export default function Dashboard() {
     const aData = await aRes.json();
     setSenders(sData.senders ?? []);
     setCounts(sData.counts ?? {});
+    setDomains(sData.domains ?? []);
+    setMatched(sData.matched ?? (sData.senders ?? []).length);
     setAlerts(aData.alerts ?? []);
-  }, [statusFilter, providerFilter, search]);
+  }, [statusFilter, providerFilter, domainFilter, scoreFilter, warmupFilter, issueFilter, blocklistedOnly, sort, dir, search]);
 
   useEffect(() => {
     load();
@@ -415,25 +435,94 @@ export default function Dashboard() {
           </div>
         </details>
 
-        {/* Filters + bulk actions */}
+        {/* Filters */}
+        {(() => {
+          const anyFilter =
+            statusFilter || providerFilter || domainFilter || scoreFilter || warmupFilter || issueFilter || blocklistedOnly || search;
+          const selectCls =
+            "rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-600 shadow-sm outline-none focus:border-sky-400";
+          return (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="⌕ search email or domain…"
+                className="w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
+              />
+              <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className={selectCls}>
+                <option value="">All providers</option>
+                <option value="maildoso">Maildoso</option>
+                <option value="google">Google</option>
+                <option value="microsoft">Microsoft</option>
+                <option value="other">Other</option>
+              </select>
+              <select value={domainFilter} onChange={(e) => setDomainFilter(e.target.value)} className={`${selectCls} max-w-[200px]`}>
+                <option value="">All domains ({domains.length})</option>
+                {domains.map((d) => (
+                  <option key={d.domain} value={d.domain}>
+                    {d.domain} ({d.n})
+                  </option>
+                ))}
+              </select>
+              <select value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value)} className={selectCls}>
+                <option value="">Any score</option>
+                <option value="high">Score 80+ (healthy)</option>
+                <option value="mid">Score 60–79 (watch)</option>
+                <option value="low">Score &lt;60 (critical)</option>
+              </select>
+              <select value={warmupFilter} onChange={(e) => setWarmupFilter(e.target.value)} className={selectCls}>
+                <option value="">Any warmup</option>
+                <option value="high">Warmup 80+</option>
+                <option value="mid">Warmup 60–79</option>
+                <option value="low">Warmup &lt;60</option>
+              </select>
+              <select value={issueFilter} onChange={(e) => setIssueFilter(e.target.value)} className={selectCls}>
+                <option value="">Any issue</option>
+                <option value="spam">Landing in spam</option>
+                <option value="no-dmarc">Missing DMARC</option>
+                <option value="disconnected">Disconnected</option>
+              </select>
+              <label className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-600 shadow-sm">
+                <input type="checkbox" checked={blocklistedOnly} onChange={(e) => setBlocklistedOnly(e.target.checked)} className="accent-red-500" />
+                Blocklisted
+              </label>
+              <select
+                value={sort ? `${sort}:${dir}` : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) { setSort(""); return; }
+                  const [f, d] = v.split(":");
+                  setSort(f);
+                  setDir(d);
+                }}
+                className={selectCls}
+              >
+                <option value="">Sort: worst first</option>
+                <option value="score:desc">Score: high → low</option>
+                <option value="score:asc">Score: low → high</option>
+                <option value="warmup:desc">Warmup: high → low</option>
+                <option value="warmup:asc">Warmup: low → high</option>
+                <option value="bounce:desc">Bounce: high → low</option>
+                <option value="email:asc">Email: A → Z</option>
+              </select>
+              {anyFilter && (
+                <button
+                  onClick={() => {
+                    setStatusFilter(""); setProviderFilter(""); setDomainFilter(""); setScoreFilter("");
+                    setWarmupFilter(""); setIssueFilter(""); setBlocklistedOnly(false); setSearch("");
+                  }}
+                  className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-500 shadow-sm transition hover:text-slate-800"
+                >
+                  ✕ Clear
+                </button>
+              )}
+              <span className="ml-1 font-mono text-xs text-slate-400">{matched} shown</span>
+            </div>
+          );
+        })()}
+
+        {/* Bulk actions */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="⌕ search email or domain…"
-            className="w-72 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
-          />
-          <select
-            value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-600 shadow-sm outline-none focus:border-sky-400"
-          >
-            <option value="">All providers</option>
-            <option value="maildoso">Maildoso</option>
-            <option value="google">Google</option>
-            <option value="microsoft">Microsoft</option>
-            <option value="other">Other</option>
-          </select>
           {selected.size > 0 && (
             <div className="ml-auto flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-md">
               <span className="font-mono text-xs text-sky-600">{selected.size} selected</span>
