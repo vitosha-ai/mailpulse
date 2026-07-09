@@ -32,6 +32,22 @@ type Alert = {
   created_at: string;
 };
 
+type SnapshotItem = {
+  key: string;
+  severity: string;
+  label: string;
+  detail: string;
+  count: number;
+  filter: Record<string, string>;
+  names?: string[];
+};
+
+type Snapshot = {
+  generatedAt: string | null;
+  fleet: Record<string, number>;
+  items: SnapshotItem[];
+};
+
 const STATUS_META: Record<string, { dot: string; label: string; text: string }> = {
   green: { dot: "bg-emerald-500", label: "Healthy", text: "text-emerald-600" },
   yellow: { dot: "bg-amber-500", label: "Degrading", text: "text-amber-600" },
@@ -89,6 +105,21 @@ export default function Dashboard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [keys, setKeys] = useState<Record<string, string | null> | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [showSnapshot, setShowSnapshot] = useState(true);
+
+  const applyFilter = (f: Record<string, string>) => {
+    // Reset filters, then apply the ones from a snapshot item.
+    setStatusFilter(f.status ?? "");
+    setProviderFilter("");
+    setDomainFilter("");
+    setScoreFilter(f.score ?? "");
+    setWarmupFilter("");
+    setIssueFilter(f.issue ?? "");
+    setBlocklistedOnly(f.blocklisted === "1");
+    setSearch("");
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  };
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams();
@@ -125,6 +156,10 @@ export default function Dashboard() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then(setKeys)
+      .catch(() => {});
+    fetch("/api/snapshot")
+      .then((r) => r.json())
+      .then(setSnapshot)
       .catch(() => {});
   }, []);
 
@@ -195,22 +230,38 @@ export default function Dashboard() {
     load();
   };
 
-  const exportPauseList = () => {
-    const rows = senders.filter((s) => s.health_status === "red" || s.health_status === "yellow");
+  const downloadCsv = (rows: Sender[], name: string) => {
+    const cell = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [
+      "email", "domain", "provider", "status", "score", "warmup", "bounce_rate",
+      "gmail", "microsoft", "spf", "dkim", "dmarc", "blocklisted", "daily_limit",
+    ];
     const csv = [
-      "email,status,score,bounce_rate,google,microsoft",
-      ...rows.map(
-        (s) =>
-          `${s.email},${s.health_status},${s.combined_score ?? ""},${s.bounce_rate ?? ""},${s.google_verdict ?? ""},${s.microsoft_verdict ?? ""}`,
+      header.join(","),
+      ...rows.map((s) =>
+        [
+          s.email, s.domain, s.provider, s.health_status, s.combined_score, s.warmup_score,
+          s.bounce_rate, s.google_verdict, s.microsoft_verdict,
+          s.spf_ok ? "pass" : "fail", s.dkim_ok ? "pass" : "fail", s.dmarc_ok ? "pass" : "fail",
+          isBlocklisted(s) ? "yes" : "no", s.daily_limit,
+        ]
+          .map(cell)
+          .join(","),
       ),
     ].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mailpulse-pause-list-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Exports exactly what's on screen — respects all active filters.
+  const exportView = () => downloadCsv(senders, "mailpulse-view");
 
   const toggleAll = (checked: boolean) => {
     setSelected(checked ? new Set(senders.map((s) => s.email)) : new Set());
@@ -255,10 +306,11 @@ export default function Dashboard() {
               ▶ Placement test (next 50)
             </button>
             <button
-              onClick={exportPauseList}
+              onClick={exportView}
+              title="Download the currently filtered rows as CSV"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
             >
-              ⤓ Export pause list
+              ⤓ Export view ({matched})
             </button>
             <a
               href="/settings"
@@ -268,6 +320,55 @@ export default function Dashboard() {
             </a>
           </div>
         </header>
+
+        {/* Morning snapshot — top things to act on */}
+        {snapshot && snapshot.items.length > 0 && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <button
+              onClick={() => setShowSnapshot((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                ☀️ Morning snapshot
+                <span className="font-normal text-slate-400">
+                  {snapshot.items.length} things to look at
+                </span>
+              </span>
+              <span className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
+                {snapshot.generatedAt && <span>as of {snapshot.generatedAt.replace("T", " ").slice(0, 16)} UTC</span>}
+                <span>{showSnapshot ? "▲" : "▼"}</span>
+              </span>
+            </button>
+            {showSnapshot && (
+              <div className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {snapshot.items.map((it) => (
+                  <button
+                    key={it.key}
+                    onClick={() => applyFilter(it.filter)}
+                    title={(it.names && it.names.length ? it.names.join(", ") + " · " : "") + it.detail}
+                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm ${
+                      it.severity === "critical"
+                        ? "border-red-200 bg-red-50 hover:border-red-300"
+                        : "border-amber-200 bg-amber-50 hover:border-amber-300"
+                    }`}
+                  >
+                    <span
+                      className={`text-2xl font-bold tabular-nums ${
+                        it.severity === "critical" ? "text-red-600" : "text-amber-600"
+                      }`}
+                    >
+                      {it.count}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-800">{it.label}</span>
+                      <span className="block text-xs leading-snug text-slate-500">{it.detail}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {(busy || notice) && (
           <div
