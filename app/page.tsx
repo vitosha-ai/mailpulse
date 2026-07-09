@@ -203,7 +203,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(14,165,233,0.10),transparent),radial-gradient(ellipse_40%_30%_at_90%_10%,rgba(16,185,129,0.07),transparent)] text-slate-800">
-      <div className="mx-auto max-w-7xl p-6">
+      <div className="mx-auto max-w-[1600px] p-6">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -474,7 +474,7 @@ export default function Dashboard() {
           <table className="w-full text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-left font-mono text-[10px] uppercase tracking-[0.15em] text-slate-500">
               <tr>
-                <th className="p-3">
+                <th className="px-3 py-2.5">
                   <input
                     type="checkbox"
                     checked={selected.size === senders.length && senders.length > 0}
@@ -482,16 +482,16 @@ export default function Dashboard() {
                     className="accent-sky-500"
                   />
                 </th>
-                <th className="p-3">Sender</th>
-                <th className="p-3" title="Where this mailbox is hosted">Provider</th>
-                <th className="p-3" title="Overall health, 0–100. 80+ healthy · 60–79 attention · <60 stop sending">Score</th>
-                <th className="p-3" title="Instantly warmup health score (0–100)">Warmup</th>
-                <th className="p-3" title="% of campaign emails that bounced. Above 3% is a problem">Bounce</th>
-                <th className="p-3" title="Latest placement test verdict at Gmail">Gmail</th>
-                <th className="p-3" title="Latest placement test verdict at Outlook/Microsoft 365">Microsoft</th>
-                <th className="p-3" title="SPF / DKIM / DMARC — DNS records proving your mail isn't forged">Auth</th>
-                <th className="p-3" title="Max emails per day this mailbox may send">Limit</th>
-                <th className="p-3" title="Recommended next step for this sender">Action</th>
+                <th className="px-3 py-2.5">Sender</th>
+                <th className="px-3 py-2.5" title="Where this mailbox is hosted">Provider</th>
+                <th className="px-3 py-2.5" title="Overall health, 0–100. 80+ healthy · 60–79 attention · <60 stop sending">Score</th>
+                <th className="px-3 py-2.5" title="Instantly warmup health score (0–100)">Warmup</th>
+                <th className="px-3 py-2.5" title="% of campaign emails that bounced. Above 3% is a problem">Bounce</th>
+                <th className="px-3 py-2.5" title="Latest placement test verdict at Gmail">Gmail</th>
+                <th className="px-3 py-2.5" title="Latest placement test verdict at Outlook/Microsoft 365">Microsoft</th>
+                <th className="px-3 py-2.5" title="SPF / DKIM / DMARC — DNS records proving your mail isn't forged">Auth</th>
+                <th className="px-3 py-2.5" title="Max emails per day this mailbox may send">Limit</th>
+                <th className="px-3 py-2.5" title="Recommended next step for this sender">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -502,7 +502,7 @@ export default function Dashboard() {
                     key={s.email}
                     className={`transition hover:bg-slate-50 ${s.instantly_status === 2 ? "opacity-50" : ""}`}
                   >
-                    <td className="p-3">
+                    <td className="px-3 py-2.5">
                       <input
                         type="checkbox"
                         checked={selected.has(s.email)}
@@ -515,7 +515,7 @@ export default function Dashboard() {
                         className="accent-sky-500"
                       />
                     </td>
-                    <td className="p-3">
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <span className={`h-2 w-2 shrink-0 rounded-full ${m.dot}`} />
                         <span className="font-mono text-[13px] text-slate-700">{s.email}</span>
@@ -539,8 +539,8 @@ export default function Dashboard() {
                         )}
                       </div>
                     </td>
-                    <td className="p-3 text-slate-500">{PROVIDER_LABEL[s.provider] ?? s.provider}</td>
-                    <td className="p-3">
+                    <td className="px-3 py-2.5 text-slate-500">{PROVIDER_LABEL[s.provider] ?? s.provider}</td>
+                    <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2">
                         <span className={`w-10 font-mono text-sm font-bold tabular-nums ${scoreColor(s.combined_score)}`}>
                           {s.combined_score ?? "—"}
@@ -556,20 +556,20 @@ export default function Dashboard() {
                     <td className={`p-3 font-mono tabular-nums ${scoreColor(s.warmup_score)}`}>
                       {s.warmup_score ?? "—"}
                     </td>
-                    <td className="p-3 font-mono tabular-nums text-slate-600">
+                    <td className="px-3 py-2.5 font-mono tabular-nums text-slate-600">
                       {s.bounce_rate != null ? `${s.bounce_rate}%` : "—"}
                     </td>
-                    <td className="p-3">{verdictBadge(s.google_verdict)}</td>
-                    <td className="p-3">{verdictBadge(s.microsoft_verdict)}</td>
-                    <td className="p-3">
+                    <td className="px-3 py-2.5">{verdictBadge(s.google_verdict)}</td>
+                    <td className="px-3 py-2.5">{verdictBadge(s.microsoft_verdict)}</td>
+                    <td className="px-3 py-2.5">
                       <span title="SPF / DKIM / DMARC" className="font-mono text-xs tracking-widest">
                         {authFlag(s.spf_ok)}
                         {authFlag(s.dkim_ok)}
                         {authFlag(s.dmarc_ok)}
                       </span>
                     </td>
-                    <td className="p-3 font-mono tabular-nums text-slate-500">{s.daily_limit ?? "—"}</td>
-                    <td className="p-3">{actionChip(s)}</td>
+                    <td className="px-3 py-2.5 font-mono tabular-nums text-slate-500">{s.daily_limit ?? "—"}</td>
+                    <td className="px-3 py-2.5">{actionChip(s)}</td>
                   </tr>
                 );
               })}
@@ -628,36 +628,36 @@ function actionChip(s: Sender) {
       return (
         <span
           title="Healthy — keep sending at the current volume."
-          className="whitespace-nowrap rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-emerald-300"
+          className="whitespace-nowrap rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-300"
         >
-          ✓ keep going
+          ✓ healthy
         </span>
       );
     case "yellow":
       return (
         <span
           title="Degrading — select this row and use “Set limit…” to cut its daily volume roughly in half, then watch it for a few days."
-          className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-700 ring-1 ring-amber-300"
+          className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-300"
         >
-          ↓ slow down
+          ↓ slow
         </span>
       );
     case "red":
       return (
         <span
           title="Critical — select this row and hit Pause. Keep warmup running; revisit in 2–3 weeks."
-          className="whitespace-nowrap rounded-md bg-red-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-red-700 ring-1 ring-red-300"
+          className="whitespace-nowrap rounded-md bg-red-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-red-700 ring-1 ring-red-300"
         >
-          ⏸ pause now
+          ⏸ pause
         </span>
       );
     default:
       return (
         <span
           title="No data yet — run a sync (and a placement test) to score this sender."
-          className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500 ring-1 ring-slate-300"
+          className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500 ring-1 ring-slate-300"
         >
-          ⟳ sync first
+          ⟳ sync
         </span>
       );
   }
