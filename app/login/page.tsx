@@ -33,21 +33,21 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#070b14] bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(34,211,238,0.13),transparent)] text-slate-200">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(14,165,233,0.10),transparent)] text-slate-800">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/60 p-8 backdrop-blur"
+        className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-md"
       >
         <div className="mb-6 flex items-center gap-3">
           <span className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.9)]" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-500 opacity-60" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-500" />
           </span>
-          <h1 className="bg-gradient-to-r from-cyan-300 via-sky-200 to-emerald-300 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+          <h1 className="bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
             MailPulse
           </h1>
         </div>
-        <label className="mb-2 block font-mono text-[11px] uppercase tracking-widest text-slate-400">
+        <label className="mb-2 block font-mono text-[11px] uppercase tracking-widest text-slate-500">
           Team password
         </label>
         <input
@@ -56,13 +56,13 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoFocus
-          className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 font-mono text-sm text-slate-200 outline-none transition focus:border-cyan-500/60 focus:shadow-[0_0_14px_rgba(34,211,238,0.15)]"
+          className="mb-3 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
         />
-        {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.35)] transition hover:shadow-[0_0_26px_rgba(34,211,238,0.55)] disabled:opacity-40"
+          className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-sky-600 hover:to-emerald-600 disabled:opacity-40"
         >
           {busy ? "Checking…" : "Enter"}
         </button>
