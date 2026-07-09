@@ -11,10 +11,29 @@ let db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (db) return db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  applyIncomingIfPresent();
   db = new Database(path.join(DATA_DIR, "mailpulse.db"));
   db.pragma("journal_mode = WAL");
   migrate(db);
   return db;
+}
+
+// Host migration: if an uploaded database is waiting (data/incoming.db), make
+// it the live database before opening. Runs before any connection is held.
+function applyIncomingIfPresent() {
+  const incoming = path.join(DATA_DIR, "incoming.db");
+  if (!fs.existsSync(incoming)) return;
+  const main = path.join(DATA_DIR, "mailpulse.db");
+  try {
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const f = main + suffix;
+      if (fs.existsSync(f)) fs.rmSync(f);
+    }
+    fs.renameSync(incoming, main);
+    console.log("[db] applied incoming.db as the live database");
+  } catch (e) {
+    console.error("[db] failed to apply incoming.db:", e instanceof Error ? e.message : e);
+  }
 }
 
 function migrate(db: Database.Database) {
