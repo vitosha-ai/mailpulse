@@ -267,8 +267,11 @@ export default function Inbox() {
       <div className="mx-auto max-w-[1400px] p-6">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-3xl font-bold tracking-tight text-transparent">
-              Inbox
+            <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+              <span>📬</span>
+              <span className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-transparent">
+                Inbox
+              </span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
               {meta.total} real replies · {meta.unseen} unread · {meta.warmupFiltered} warmup filtered out

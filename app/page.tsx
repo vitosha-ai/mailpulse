@@ -107,6 +107,7 @@ export default function Dashboard() {
   const [keys, setKeys] = useState<Record<string, string | null> | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [showSnapshot, setShowSnapshot] = useState(true);
+  const [inboxUnread, setInboxUnread] = useState(0);
 
   const applyFilter = (f: Record<string, string>) => {
     // Reset filters, then apply the ones from a snapshot item.
@@ -160,6 +161,10 @@ export default function Dashboard() {
     fetch("/api/snapshot")
       .then((r) => r.json())
       .then(setSnapshot)
+      .catch(() => {});
+    fetch("/api/inbox")
+      .then((r) => r.json())
+      .then((d) => setInboxUnread(d.unseen ?? 0))
       .catch(() => {});
   }, []);
 
@@ -314,9 +319,14 @@ export default function Dashboard() {
             </button>
             <a
               href="/inbox"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+              className="relative rounded-lg bg-gradient-to-r from-brand to-brand-light px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
             >
-              ✉ Inbox
+              <span className="mr-1">📬</span> Inbox
+              {inboxUnread > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[11px] font-bold text-white shadow ring-2 ring-white">
+                  {inboxUnread > 999 ? "999+" : inboxUnread}
+                </span>
+              )}
             </a>
             <a
               href="/settings"
