@@ -57,11 +57,11 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(14,165,233,0.10),transparent)] text-slate-800">
+    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
       <div className="mx-auto max-w-2xl p-6">
         <header className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+            <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Settings
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -103,12 +103,12 @@ export default function Settings() {
                   value={values[f.key] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                   placeholder={masked[f.key] ? `Saved: ${masked[f.key]} — paste to replace` : "Paste key here"}
-                  className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
+                  className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
                 />
                 <button
                   onClick={() => save(f.key)}
                   disabled={!values[f.key]}
-                  className="rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-sky-600 hover:to-emerald-600 disabled:opacity-30"
+                  className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-30"
                 >
                   {saved === f.key ? "Saved ✓" : "Save"}
                 </button>
@@ -123,18 +123,18 @@ export default function Settings() {
           </p>
           <ul className="mt-3 space-y-2">
             <li className="flex gap-2">
-              <span className="text-sky-500">›</span>
+              <span className="text-brand">›</span>
               <span>
                 Instantly <b className="text-slate-800">Inbox Placement add-on</b> ($47/mo, Growth tier) —
                 required for the real Gmail/Microsoft placement tests. Warmup scores work without it.
               </span>
             </li>
             <li className="flex gap-2">
-              <span className="text-sky-500">›</span>
+              <span className="text-brand">›</span>
               <span>Saleshandy Pro+ plan for API access (you likely already have it).</span>
             </li>
             <li className="flex gap-2">
-              <span className="text-sky-500">›</span>
+              <span className="text-brand">›</span>
               <span>Spamhaus DQS is free — just needs the signup.</span>
             </li>
           </ul>

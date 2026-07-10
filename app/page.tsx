@@ -273,16 +273,16 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(14,165,233,0.10),transparent),radial-gradient(ellipse_40%_30%_at_90%_10%,rgba(16,185,129,0.07),transparent)] text-slate-800">
-      <div className="mx-auto max-w-[1600px] p-6">
+    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent),radial-gradient(ellipse_40%_30%_at_90%_10%,rgba(50,143,255,0.10),transparent)] text-slate-800">
+      <div className="mx-auto max-w-[1850px] p-6">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <span className="relative flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-500 opacity-60" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-60" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-brand" />
               </span>
-              <h1 className="bg-gradient-to-r from-sky-600 via-cyan-600 to-emerald-600 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
+              <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-3xl font-bold tracking-tight text-transparent">
                 MailPulse
               </h1>
             </div>
@@ -294,14 +294,14 @@ export default function Dashboard() {
             <button
               onClick={runSync}
               disabled={!!busy}
-              className="rounded-lg bg-gradient-to-r from-sky-500 to-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-sky-600 hover:to-emerald-600 disabled:opacity-40"
+              className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
             >
               ⟳ Sync now
             </button>
             <button
               onClick={runPlacement}
               disabled={!!busy}
-              className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:border-sky-400 hover:bg-sky-100 disabled:opacity-40"
+              className="rounded-lg border border-brand/40 bg-brand/5 px-4 py-2 text-sm font-medium text-brand transition hover:border-brand hover:bg-brand/10 disabled:opacity-40"
             >
               ▶ Placement test (next 50)
             </button>
@@ -321,66 +321,17 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Morning snapshot — top things to act on */}
-        {snapshot && snapshot.items.length > 0 && (
-          <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <button
-              onClick={() => setShowSnapshot((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left"
-            >
-              <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                ☀️ Morning snapshot
-                <span className="font-normal text-slate-400">
-                  {snapshot.items.length} things to look at
-                </span>
-              </span>
-              <span className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
-                {snapshot.generatedAt && <span>as of {snapshot.generatedAt.replace("T", " ").slice(0, 16)} UTC</span>}
-                <span>{showSnapshot ? "▲" : "▼"}</span>
-              </span>
-            </button>
-            {showSnapshot && (
-              <div className="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                {snapshot.items.map((it) => (
-                  <button
-                    key={it.key}
-                    onClick={() => applyFilter(it.filter)}
-                    title={(it.names && it.names.length ? it.names.join(", ") + " · " : "") + it.detail}
-                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm ${
-                      it.severity === "critical"
-                        ? "border-red-200 bg-red-50 hover:border-red-300"
-                        : "border-amber-200 bg-amber-50 hover:border-amber-300"
-                    }`}
-                  >
-                    <span
-                      className={`text-2xl font-bold tabular-nums ${
-                        it.severity === "critical" ? "text-red-600" : "text-amber-600"
-                      }`}
-                    >
-                      {it.count}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-slate-800">{it.label}</span>
-                      <span className="block text-xs leading-snug text-slate-500">{it.detail}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {(busy || notice) && (
           <div
             className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
               busy
-                ? "border-sky-300 bg-sky-50 text-sky-800"
+                ? "border-brand/40 bg-brand/5 text-brand-dark"
                 : "border-slate-200 bg-white text-slate-600 shadow-sm"
             }`}
           >
             {busy ? (
               <span className="flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
                 {busy}
               </span>
             ) : (
@@ -391,8 +342,8 @@ export default function Dashboard() {
 
         {/* Setup checklist — shows until everything is connected */}
         {keys && (!keys.instantly_api_key || !keys.saleshandy_api_key || !keys.spamhaus_dqs_key || total === 0) && (
-          <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-5">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-sky-600">
+          <div className="mb-6 rounded-2xl border border-brand/25 bg-brand/5 p-5">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-brand">
               Getting started
             </p>
             <ul className="mt-3 space-y-2 text-sm">
@@ -429,13 +380,16 @@ export default function Dashboard() {
             </ul>
             <a
               href="/settings"
-              className="mt-4 inline-block rounded-lg border border-sky-300 bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-200"
+              className="mt-4 inline-block rounded-lg border border-brand/40 bg-brand/10 px-4 py-2 text-sm font-medium text-brand transition hover:bg-brand/20"
             >
               Open Settings →
             </a>
           </div>
         )}
 
+        {/* Two-column layout: main working area + right rail (widgets) */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+        <main className="min-w-0 flex-1">
         {/* Status summary */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(["green", "yellow", "red", "unknown"] as const).map((st) => {
@@ -447,7 +401,7 @@ export default function Dashboard() {
                 onClick={() => setStatusFilter(active ? "" : st)}
                 className={`group rounded-2xl border p-4 text-left shadow-sm transition ${
                   active
-                    ? "border-sky-400 bg-sky-50 ring-1 ring-sky-300"
+                    ? "border-brand bg-brand/5 ring-1 ring-brand/40"
                     : "border-slate-200 bg-white hover:border-slate-300"
                 }`}
               >
@@ -464,40 +418,6 @@ export default function Dashboard() {
             );
           })}
         </div>
-
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <div className="mb-6 overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 shadow-sm">
-            <div className="flex items-center gap-2 border-b border-amber-200 px-4 py-2.5 text-sm font-semibold text-amber-800">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-              {alerts.length} open alert{alerts.length === 1 ? "" : "s"}
-            </div>
-            <ul className="max-h-56 divide-y divide-amber-100 overflow-y-auto">
-              {alerts.map((a) => (
-                <li key={a.id} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm">
-                  <span className="text-slate-700">
-                    <span
-                      className={`mr-2 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
-                        a.severity === "critical"
-                          ? "bg-red-100 text-red-700 ring-1 ring-red-300"
-                          : "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
-                      }`}
-                    >
-                      {a.severity}
-                    </span>
-                    {a.message}
-                  </span>
-                  <button
-                    onClick={() => resolveAlert(a.id)}
-                    className="shrink-0 font-mono text-xs text-slate-400 transition hover:text-slate-700"
-                  >
-                    dismiss ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {/* Plain-English guide */}
         <details className="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -541,14 +461,14 @@ export default function Dashboard() {
           const anyFilter =
             statusFilter || providerFilter || domainFilter || scoreFilter || warmupFilter || issueFilter || blocklistedOnly || search;
           const selectCls =
-            "rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-600 shadow-sm outline-none focus:border-sky-400";
+            "rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-600 shadow-sm outline-none focus:border-brand";
           return (
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="⌕ search email or domain…"
-                className="w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-sky-400 focus:ring-1 focus:ring-sky-300"
+                className="w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
               />
               <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className={selectCls}>
                 <option value="">All providers</option>
@@ -626,7 +546,7 @@ export default function Dashboard() {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {selected.size > 0 && (
             <div className="ml-auto flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-md">
-              <span className="font-mono text-xs text-sky-600">{selected.size} selected</span>
+              <span className="font-mono text-xs text-brand">{selected.size} selected</span>
               <button
                 onClick={() => doAction("pause")}
                 className="rounded-md bg-red-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-red-600"
@@ -636,7 +556,7 @@ export default function Dashboard() {
               <button
                 onClick={() => doAction("retire")}
                 title="Graceful pause: keeps follow-ups flowing at 10/day, then fully pauses once this sender's campaigns finish"
-                className="rounded-md bg-sky-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-sky-600"
+                className="rounded-md bg-brand px-2.5 py-1 text-xs font-bold text-white transition hover:bg-brand-dark"
               >
                 ◐ Retire
               </button>
@@ -669,7 +589,7 @@ export default function Dashboard() {
                     type="checkbox"
                     checked={selected.size === senders.length && senders.length > 0}
                     onChange={(e) => toggleAll(e.target.checked)}
-                    className="accent-sky-500"
+                    className="accent-brand"
                   />
                 </th>
                 <th className="px-3 py-2.5">Sender</th>
@@ -702,7 +622,7 @@ export default function Dashboard() {
                           else next.delete(s.email);
                           setSelected(next);
                         }}
-                        className="accent-sky-500"
+                        className="accent-brand"
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -722,7 +642,7 @@ export default function Dashboard() {
                         {s.retire_requested && (
                           <span
                             title="Graceful pause in progress: follow-ups still flowing; fully pauses when its campaigns finish"
-                            className="rounded-md bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-700 ring-1 ring-sky-300"
+                            className="rounded-md bg-brand/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-brand ring-1 ring-brand/40"
                           >
                             RETIRING
                           </span>
@@ -767,7 +687,7 @@ export default function Dashboard() {
                 <tr>
                   <td colSpan={11} className="p-10 text-center text-slate-400">
                     No senders yet. Add your API keys in{" "}
-                    <a href="/settings" className="text-sky-600 underline decoration-sky-300 hover:text-sky-700">
+                    <a href="/settings" className="text-brand underline decoration-brand/40 hover:text-brand">
                       Settings
                     </a>
                     , then hit <b className="text-slate-600">⟳ Sync now</b>.
@@ -776,6 +696,94 @@ export default function Dashboard() {
               )}
             </tbody>
           </table>
+        </div>
+        </main>
+
+        {/* Right rail — widget on top, notifications under it (Windows 11 style) */}
+        <aside className="w-full shrink-0 space-y-6 lg:w-80">
+          {/* Morning snapshot widget */}
+          {snapshot && snapshot.items.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <button
+                onClick={() => setShowSnapshot((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  ☀️ Snapshot
+                  <span className="font-normal text-slate-400">{snapshot.items.length}</span>
+                </span>
+                <span className="font-mono text-[11px] text-slate-400">{showSnapshot ? "▲" : "▼"}</span>
+              </button>
+              {snapshot.generatedAt && (
+                <p className="-mt-1 px-4 pb-2 font-mono text-[10px] text-slate-400">
+                  as of {snapshot.generatedAt.replace("T", " ").slice(0, 16)} UTC
+                </p>
+              )}
+              {showSnapshot && (
+                <div className="space-y-2 border-t border-slate-100 p-3">
+                  {snapshot.items.map((it) => (
+                    <button
+                      key={it.key}
+                      onClick={() => applyFilter(it.filter)}
+                      title={(it.names && it.names.length ? it.names.join(", ") + " · " : "") + it.detail}
+                      className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm ${
+                        it.severity === "critical"
+                          ? "border-red-200 bg-red-50 hover:border-red-300"
+                          : "border-amber-200 bg-amber-50 hover:border-amber-300"
+                      }`}
+                    >
+                      <span
+                        className={`text-2xl font-bold tabular-nums ${
+                          it.severity === "critical" ? "text-red-600" : "text-amber-600"
+                        }`}
+                      >
+                        {it.count}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-800">{it.label}</span>
+                        <span className="block text-xs leading-snug text-slate-500">{it.detail}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notifications */}
+          {alerts.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-amber-200 px-4 py-2.5 text-sm font-semibold text-amber-800">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+                🔔 {alerts.length} notification{alerts.length === 1 ? "" : "s"}
+              </div>
+              <ul className="max-h-[28rem] divide-y divide-amber-100 overflow-y-auto">
+                {alerts.map((a) => (
+                  <li key={a.id} className="flex items-start justify-between gap-2 px-4 py-2.5 text-sm">
+                    <span className="text-slate-700">
+                      <span
+                        className={`mr-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
+                          a.severity === "critical"
+                            ? "bg-red-100 text-red-700 ring-1 ring-red-300"
+                            : "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
+                        }`}
+                      >
+                        {a.severity}
+                      </span>
+                      {a.message}
+                    </span>
+                    <button
+                      onClick={() => resolveAlert(a.id)}
+                      className="shrink-0 font-mono text-xs text-slate-400 transition hover:text-slate-700"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </aside>
         </div>
       </div>
     </div>

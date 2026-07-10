@@ -14,6 +14,13 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Vitosha Inc. brand palette (from vitoshainc.com) */
+  --color-brand: #0b40b0; /* royal blue — primary */
+  --color-brand-dark: #00184c; /* deep navy */
+  --color-brand-light: #328fff; /* bright blue */
+  --color-brand-bright: #52a9ff; /* sky-bright accent */
+  --color-brand-accent: #ff8000; /* orange pop */
 }
 
 body {
