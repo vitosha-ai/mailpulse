@@ -236,8 +236,10 @@ export async function syncInbox(): Promise<string> {
         .get() as { m: number | null };
       const since = (maxRow.m ?? 0) + 1;
 
-      // Fetch source for new UIDs; range "since:*" grabs everything newer.
-      for await (const msg of client.fetch(`${since}:*`, { uid: true, source: true })) {
+      // Fetch source for new UIDs. The 3rd arg { uid: true } makes the range
+      // UID-based, so "since:*" (since = max UID + 1) means "everything with a
+      // higher UID" — not a sequence number (which would overflow and fail).
+      for await (const msg of client.fetch(`${since}:*`, { uid: true, source: true }, { uid: true })) {
         const parsed = await simpleParser(msg.source as Buffer);
         const r = storeMessage({
           source: "maildoso",
