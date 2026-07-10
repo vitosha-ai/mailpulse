@@ -15,9 +15,23 @@ type Message = {
   seen: number;
   flagged: number;
   pinned: number;
+  tags: string[];
 };
 
 type Group = { key: string; label: string; uids: number[] };
+type Tag = { name: string; color: string; count: number };
+
+const TAG_COLORS = ["slate", "blue", "emerald", "amber", "red", "violet", "pink", "cyan"];
+const TAG_CLS: Record<string, string> = {
+  slate: "bg-slate-100 text-slate-700 ring-slate-300",
+  blue: "bg-brand/10 text-brand ring-brand/30",
+  emerald: "bg-emerald-100 text-emerald-700 ring-emerald-300",
+  amber: "bg-amber-100 text-amber-700 ring-amber-300",
+  red: "bg-red-100 text-red-700 ring-red-400",
+  violet: "bg-violet-100 text-violet-700 ring-violet-300",
+  pink: "bg-pink-100 text-pink-700 ring-pink-300",
+  cyan: "bg-cyan-100 text-cyan-700 ring-cyan-300",
+};
 
 const CATS: { key: string; label: string }[] = [
   { key: "", label: "All" },
@@ -46,6 +60,8 @@ export default function Inbox() {
   const [sort, setSort] = useState("newest");
   const [group, setGroup] = useState("");
   const [quick, setQuick] = useState(""); // "", unseen, flagged, pinned
+  const [tagFilter, setTagFilter] = useState("");
+  const [tags, setTags] = useState<Tag[]>([]);
   const [open, setOpen] = useState<Message | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -56,11 +72,13 @@ export default function Inbox() {
     if (sort) qs.set("sort", sort);
     if (group) qs.set("group", group);
     if (quick) qs.set(quick, "1");
+    if (tagFilter) qs.set("tag", tagFilter);
     const res = await fetch(`/api/inbox?${qs}`);
     const d = await res.json();
     setMessages(d.messages ?? []);
     setGroups(d.groups ?? null);
     setCounts(d.counts ?? {});
+    setTags(d.tags ?? []);
     setMeta({
       unseen: d.unseen ?? 0,
       total: d.total ?? 0,
@@ -68,7 +86,7 @@ export default function Inbox() {
       flaggedCount: d.flaggedCount ?? 0,
       pinnedCount: d.pinnedCount ?? 0,
     });
-  }, [cat, search, sort, group, quick]);
+  }, [cat, search, sort, group, quick, tagFilter]);
 
   useEffect(() => {
     load();
@@ -102,6 +120,30 @@ export default function Inbox() {
       await act(m.uid, "seen", true);
       setMessages((ms) => ms.map((x) => (x.uid === m.uid ? { ...x, seen: 1 } : x)));
     }
+  };
+
+  const toggleTag = async (uid: number, tag: string, add: boolean) => {
+    await fetch("/api/inbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "tag", uid, tag, value: add }),
+    });
+    // optimistic local update
+    const upd = (m: Message) =>
+      m.uid === uid ? { ...m, tags: add ? [...new Set([...m.tags, tag])] : m.tags.filter((t) => t !== tag) } : m;
+    setMessages((ms) => ms.map(upd));
+    if (open?.uid === uid) setOpen((o) => (o ? upd(o) : o));
+    load();
+  };
+
+  const createAndApplyTag = async (uid: number) => {
+    const name = prompt("New tag name (e.g. Hot lead, Demo booked, Follow up):");
+    if (name && name.trim()) await toggleTag(uid, name.trim(), true);
+  };
+
+  const tagCls = (name: string) => {
+    const color = tags.find((t) => t.name === name)?.color ?? "slate";
+    return TAG_CLS[color] ?? TAG_CLS.slate;
   };
 
   const byUid = new Map(messages.map((m) => [m.uid, m]));
@@ -138,19 +180,48 @@ export default function Inbox() {
               </span>
               <span className="mt-0.5 block truncate text-sm text-slate-700">{m.subject || "(no subject)"}</span>
               <span className="mt-0.5 block truncate text-xs text-slate-400">{m.preview}</span>
+              {m.tags.length > 0 && (
+                <span className="mt-1 flex flex-wrap gap-1">
+                  {m.tags.map((t) => (
+                    <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${tagCls(t)}`}>
+                      {t}
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
             <span className="shrink-0 whitespace-nowrap font-mono text-xs text-slate-400">
               {m.received_at?.replace("T", " ").slice(0, 16)}
             </span>
           </button>
-          {/* not-a-reply / warmup */}
-          <button
-            onClick={() => act(m.uid, "mark-warmup")}
-            title="Not a real reply — hide as warmup"
-            className="mt-3 shrink-0 text-xs text-slate-300 opacity-0 transition group-hover:opacity-100 hover:text-red-500"
-          >
-            ✕
-          </button>
+          {/* tag + not-a-reply */}
+          <span className="mt-2.5 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+            <span className="group/tag relative">
+              <button title="Add tag" className="text-xs text-slate-400 hover:text-brand">🏷</button>
+              <span className="absolute right-0 top-5 z-10 hidden min-w-[9rem] flex-col rounded-lg border border-slate-200 bg-white p-1 shadow-lg group-hover/tag:flex">
+                {tags.map((t) => (
+                  <button
+                    key={t.name}
+                    onClick={() => toggleTag(m.uid, t.name, !m.tags.includes(t.name))}
+                    className="flex items-center justify-between rounded px-2 py-1 text-left text-xs hover:bg-slate-50"
+                  >
+                    <span className={`rounded px-1.5 py-0.5 ring-1 ${tagCls(t.name)}`}>{t.name}</span>
+                    {m.tags.includes(t.name) && <span className="text-emerald-600">✓</span>}
+                  </button>
+                ))}
+                <button onClick={() => createAndApplyTag(m.uid)} className="rounded px-2 py-1 text-left text-xs text-brand hover:bg-slate-50">
+                  + New tag…
+                </button>
+              </span>
+            </span>
+            <button
+              onClick={() => act(m.uid, "mark-warmup")}
+              title="Not a real reply — hide as warmup"
+              className="text-xs text-slate-300 hover:text-red-500"
+            >
+              ✕
+            </button>
+          </span>
         </li>
       ))}
       {list.length === 0 && <li className="px-4 py-8 text-center text-sm text-slate-400">No messages match this filter.</li>}
@@ -215,6 +286,29 @@ export default function Inbox() {
             </button>
           ))}
         </div>
+
+        {/* Tag filter bar */}
+        {tags.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Tags:</span>
+            {tags.map((t) => (
+              <button
+                key={t.name}
+                onClick={() => setTagFilter(tagFilter === t.name ? "" : t.name)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 transition ${tagCls(t.name)} ${
+                  tagFilter === t.name ? "ring-2" : "opacity-80 hover:opacity-100"
+                }`}
+              >
+                {t.name} <span className="opacity-60">{t.count}</span>
+              </button>
+            ))}
+            {tagFilter && (
+              <button onClick={() => setTagFilter("")} className="text-xs text-slate-400 underline hover:text-slate-700">
+                clear
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Toolbar: quick filters + sort + group + search */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -302,6 +396,33 @@ export default function Inbox() {
               <p><span className="text-slate-400">From:</span> <b className="text-slate-800">{open.from_name}</b> &lt;{open.from_email}&gt;</p>
               <p><span className="text-slate-400">Replied to:</span> {open.to_email}</p>
               <p><span className="text-slate-400">When:</span> {open.received_at?.replace("T", " ").slice(0, 16)}</p>
+              <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                <span className="text-slate-400">Tags:</span>
+                {open.tags.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => toggleTag(open.uid, t, false)}
+                    title="Remove tag"
+                    className={`rounded px-1.5 py-0.5 text-xs font-semibold ring-1 ${tagCls(t)}`}
+                  >
+                    {t} ✕
+                  </button>
+                ))}
+                {tags
+                  .filter((t) => !open.tags.includes(t.name))
+                  .map((t) => (
+                    <button
+                      key={t.name}
+                      onClick={() => toggleTag(open.uid, t.name, true)}
+                      className="rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-xs text-slate-500 hover:border-brand hover:text-brand"
+                    >
+                      + {t.name}
+                    </button>
+                  ))}
+                <button onClick={() => createAndApplyTag(open.uid)} className="rounded px-1.5 py-0.5 text-xs font-semibold text-brand hover:underline">
+                  + New tag
+                </button>
+              </div>
             </div>
             <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">{open.body || open.preview}</pre>
             <p className="mt-6 text-xs text-slate-400">

@@ -10,42 +10,53 @@ export async function GET(request: NextRequest) {
   const unseen = sp.get("unseen");
   const flagged = sp.get("flagged");
   const pinned = sp.get("pinned");
+  const tag = sp.get("tag");
   const sort = sp.get("sort") ?? "newest";
   const group = sp.get("group") ?? "";
 
-  const where = ["is_warmup = 0"];
+  const where = ["m.is_warmup = 0"];
   const params: unknown[] = [];
   if (category) {
-    where.push("category = ?");
+    where.push("m.category = ?");
     params.push(category);
   }
-  if (unseen === "1") where.push("seen = 0");
-  if (flagged === "1") where.push("flagged = 1");
-  if (pinned === "1") where.push("pinned = 1");
+  if (unseen === "1") where.push("m.seen = 0");
+  if (flagged === "1") where.push("m.flagged = 1");
+  if (pinned === "1") where.push("m.pinned = 1");
+  if (tag) {
+    where.push("EXISTS (SELECT 1 FROM inbox_message_tags mt WHERE mt.uid = m.uid AND mt.tag = ?)");
+    params.push(tag);
+  }
   if (q) {
-    where.push("(from_email LIKE ? OR from_name LIKE ? OR subject LIKE ? OR preview LIKE ? OR to_email LIKE ?)");
+    where.push("(m.from_email LIKE ? OR m.from_name LIKE ? OR m.subject LIKE ? OR m.preview LIKE ? OR m.to_email LIKE ?)");
     params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
 
   const sortSql: Record<string, string> = {
-    newest: "received_at DESC",
-    oldest: "received_at ASC",
-    sender: "from_email ASC",
-    category: "category ASC, received_at DESC",
-    unread: "seen ASC, received_at DESC",
+    newest: "m.received_at DESC",
+    oldest: "m.received_at ASC",
+    sender: "m.from_email ASC",
+    category: "m.category ASC, m.received_at DESC",
+    unread: "m.seen ASC, m.received_at DESC",
   };
   // Pinned always float to the top, then the chosen sort.
-  const orderBy = `pinned DESC, ${sortSql[sort] ?? sortSql.newest}`;
+  const orderBy = `m.pinned DESC, ${sortSql[sort] ?? sortSql.newest}`;
 
   const db = getDb();
   const messages = db
     .prepare(
-      `SELECT uid, from_email, from_name, to_email, subject, preview, body, received_at,
-              category, seen, flagged, pinned
-       FROM inbox_messages WHERE ${where.join(" AND ")}
+      `SELECT m.uid, m.from_email, m.from_name, m.to_email, m.subject, m.preview, m.body,
+              m.received_at, m.category, m.seen, m.flagged, m.pinned,
+              (SELECT GROUP_CONCAT(mt.tag, ',') FROM inbox_message_tags mt WHERE mt.uid = m.uid) AS tags
+       FROM inbox_messages m WHERE ${where.join(" AND ")}
        ORDER BY ${orderBy} LIMIT 500`,
     )
-    .all(...params) as Record<string, unknown>[];
+    .all(...params)
+    .map((r) => {
+      const row = r as Record<string, unknown>;
+      row.tags = row.tags ? String(row.tags).split(",") : [];
+      return row;
+    }) as Record<string, unknown>[];
 
   // Optional grouping done server-side so the UI just renders sections.
   let groups: { key: string; label: string; uids: number[] }[] | null = null;
@@ -66,10 +77,18 @@ export async function GET(request: NextRequest) {
     .prepare("SELECT category, COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 GROUP BY category")
     .all() as { category: string; n: number }[];
   const scalar = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+  const tags = db
+    .prepare(
+      `SELECT t.name, t.color,
+              (SELECT COUNT(*) FROM inbox_message_tags mt WHERE mt.tag = t.name) AS count
+       FROM inbox_tags t ORDER BY t.name`,
+    )
+    .all();
 
   return NextResponse.json({
     messages,
     groups,
+    tags,
     counts: Object.fromEntries(counts.map((c) => [c.category, c.n])),
     unseen: scalar("SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND seen = 0"),
     flaggedCount: scalar("SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND flagged = 1"),
@@ -85,6 +104,7 @@ export async function POST(request: NextRequest) {
     action?: string;
     uid?: number;
     value?: boolean;
+    tag?: string;
   };
   const db = getDb();
 
@@ -113,6 +133,18 @@ export async function POST(request: NextRequest) {
       // User says this is warmup/not a real reply — hide it from the inbox.
       db.prepare("UPDATE inbox_messages SET is_warmup = 1 WHERE uid = ?").run(body.uid);
       break;
+    case "tag": {
+      const t = (body.tag ?? "").trim();
+      if (!t) return NextResponse.json({ error: "tag required" }, { status: 400 });
+      // Ensure the tag exists in the palette, then attach/detach.
+      db.prepare("INSERT OR IGNORE INTO inbox_tags (name, color) VALUES (?, 'slate')").run(t);
+      if (body.value === false) {
+        db.prepare("DELETE FROM inbox_message_tags WHERE uid = ? AND tag = ?").run(body.uid, t);
+      } else {
+        db.prepare("INSERT OR IGNORE INTO inbox_message_tags (uid, tag) VALUES (?, ?)").run(body.uid, t);
+      }
+      break;
+    }
     default:
       return NextResponse.json({ error: "unknown action" }, { status: 400 });
   }

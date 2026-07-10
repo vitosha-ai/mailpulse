@@ -153,6 +153,19 @@ function migrate(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_inbox_received ON inbox_messages(received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_inbox_category ON inbox_messages(category);
 
+    -- User-created tags (the palette) and which messages carry them.
+    CREATE TABLE IF NOT EXISTS inbox_tags (
+      name TEXT PRIMARY KEY,
+      color TEXT NOT NULL DEFAULT 'slate',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS inbox_message_tags (
+      uid INTEGER NOT NULL,
+      tag TEXT NOT NULL,
+      PRIMARY KEY (uid, tag)
+    );
+    CREATE INDEX IF NOT EXISTS idx_msgtags_tag ON inbox_message_tags(tag);
+
     CREATE TABLE IF NOT EXISTS sync_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       started_at TEXT NOT NULL DEFAULT (datetime('now')),
