@@ -50,8 +50,8 @@ type Snapshot = {
 
 const STATUS_META: Record<string, { dot: string; label: string; text: string }> = {
   green: { dot: "bg-emerald-500", label: "Healthy", text: "text-emerald-600" },
-  yellow: { dot: "bg-amber-500", label: "Degrading", text: "text-amber-600" },
-  red: { dot: "bg-red-500", label: "Critical", text: "text-red-600" },
+  yellow: { dot: "bg-amber-500", label: "Degrading", text: "text-amber-700" },
+  red: { dot: "bg-red-600", label: "Critical", text: "text-red-700" },
   unknown: { dot: "bg-slate-400", label: "No data", text: "text-slate-500" },
 };
 
@@ -74,8 +74,8 @@ function isBlocklisted(s: Sender): boolean {
 function scoreColor(score: number | null): string {
   if (score === null) return "text-slate-400";
   if (score >= 80) return "text-emerald-600";
-  if (score >= 60) return "text-amber-600";
-  return "text-red-600";
+  if (score >= 60) return "text-amber-700";
+  return "text-red-700";
 }
 
 function scoreBarColor(score: number | null): string {
@@ -630,7 +630,7 @@ export default function Dashboard() {
                         <span className={`h-2 w-2 shrink-0 rounded-full ${m.dot}`} />
                         <span className="font-mono text-[13px] text-slate-700">{s.email}</span>
                         {isBlocklisted(s) && (
-                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-red-700 ring-1 ring-red-300">
+                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-red-700 ring-1 ring-red-400">
                             BLOCKLISTED
                           </span>
                         )}
@@ -728,8 +728,8 @@ export default function Dashboard() {
                       title={(it.names && it.names.length ? it.names.join(", ") + " · " : "") + it.detail}
                       className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm ${
                         it.severity === "critical"
-                          ? "border-red-200 bg-red-50 hover:border-red-300"
-                          : "border-amber-200 bg-amber-50 hover:border-amber-300"
+                          ? "border-red-400 bg-red-100 hover:border-red-400"
+                          : "border-amber-400 bg-amber-100 hover:border-amber-400"
                       }`}
                     >
                       <span
@@ -752,8 +752,8 @@ export default function Dashboard() {
 
           {/* Notifications */}
           {alerts.length > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-amber-200 px-4 py-2.5 text-sm font-semibold text-amber-800">
+            <div className="overflow-hidden rounded-2xl border border-amber-400 bg-amber-100 shadow-sm">
+              <div className="flex items-center gap-2 border-b border-amber-400 px-4 py-2.5 text-sm font-semibold text-amber-800">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
                 🔔 {alerts.length} notification{alerts.length === 1 ? "" : "s"}
               </div>
@@ -764,8 +764,8 @@ export default function Dashboard() {
                       <span
                         className={`mr-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
                           a.severity === "critical"
-                            ? "bg-red-100 text-red-700 ring-1 ring-red-300"
-                            : "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
+                            ? "bg-red-100 text-red-700 ring-1 ring-red-400"
+                            : "bg-amber-100 text-amber-700 ring-1 ring-amber-400"
                         }`}
                       >
                         {a.severity}
@@ -835,7 +835,7 @@ function actionChip(s: Sender) {
       return (
         <span
           title="Degrading — select this row and use “Set limit…” to cut its daily volume roughly in half, then watch it for a few days."
-          className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-300"
+          className="whitespace-nowrap rounded-md bg-amber-100 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-400"
         >
           ↓ slow
         </span>
@@ -844,7 +844,7 @@ function actionChip(s: Sender) {
       return (
         <span
           title="Critical — select this row and hit Pause. Keep warmup running; revisit in 2–3 weeks."
-          className="whitespace-nowrap rounded-md bg-red-50 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-red-700 ring-1 ring-red-300"
+          className="whitespace-nowrap rounded-md bg-red-100 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-red-700 ring-1 ring-red-400"
         >
           ⏸ pause
         </span>
@@ -867,7 +867,7 @@ function verdictBadge(v: string | null) {
     v === "inbox"
       ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300"
       : v === "spam"
-        ? "bg-red-50 text-red-700 ring-1 ring-red-300"
+        ? "bg-red-100 text-red-700 ring-1 ring-red-400"
         : "bg-slate-100 text-slate-500 ring-1 ring-slate-300";
   return (
     <span className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${cls}`}>
