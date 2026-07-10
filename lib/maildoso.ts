@@ -43,7 +43,15 @@ function findCreds(data: unknown): ImapCreds | null {
 export async function discoverMasterInboxImap(): Promise<ImapCreds | null> {
   const token = getSetting("maildoso_api_key");
   if (!token) return null;
-  const paths = ["/user/accounts/forwarding", "/user/forwarding", "/user/accounts-lookup", "/user/accounts"];
+  // Verified against the Maildoso OpenAPI (July 2026): forwarding-lookup and
+  // accounts/forwarding return the master @maildoso.email box; accounts-lookup
+  // returns per-mailbox IMAP creds as a fallback.
+  const paths = [
+    "/user/forwarding-lookup",
+    "/user/accounts/forwarding",
+    "/user/accounts-lookup",
+    "/user/accounts",
+  ];
   for (const base of BASES) {
     for (const path of paths) {
       try {

@@ -146,6 +146,8 @@ function migrate(db: Database.Database) {
       category TEXT,                    -- interested | out-of-office | unsubscribe | auto-reply | other
       is_warmup INTEGER NOT NULL DEFAULT 0,
       seen INTEGER NOT NULL DEFAULT 0,
+      flagged INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
       fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_inbox_received ON inbox_messages(received_at DESC);
@@ -173,6 +175,8 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN ti_score REAL",
     "ALTER TABLE senders ADD COLUMN est_daily_volume REAL",
     "ALTER TABLE senders ADD COLUMN sh_used_today INTEGER",
+    "ALTER TABLE inbox_messages ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE inbox_messages ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE senders ADD COLUMN campaigns TEXT", // JSON [{id,name,status}] from the sender's sequencer
     "ALTER TABLE senders ADD COLUMN retire_requested TEXT", // timestamp when user asked for graceful pause
     "ALTER TABLE senders ADD COLUMN sh_zero_days INTEGER DEFAULT 0",

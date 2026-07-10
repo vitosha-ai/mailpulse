@@ -34,27 +34,46 @@ function isWarmupMessage(input: {
   body: string;
   headers: string;
   fromEmail: string;
+  toEmail: string;
   fleetDomains: Set<string>;
 }): boolean {
-  const hay = `${input.subject}\n${input.headers}`.toLowerCase();
-  // Instantly + common warmup fingerprints.
-  const markers = [
-    "x-instantly", // Instantly injects x-instantly-* headers
-    "instantly-warmup",
-    "ipwarmup",
-    "warmup",
+  const headersLc = input.headers.toLowerCase();
+  // 1) Warmup tools stamp identifiable headers. This is the strongest signal.
+  const headerMarkers = [
+    "x-instantly",
     "x-warmup",
-    "emailwarmup",
-    "mailwarm",
-    "x-tw-", // TrulyInbox / warmup tags
+    "x-tw-",
+    "x-mailwarm",
+    "x-emailwarmup",
+    "list-id: warmup",
+    "warmup-id",
+    "x-warmupinbox",
+    "x-wu-",
+    "feedback-id: warmup",
   ];
-  if (markers.some((m) => hay.includes(m))) return true;
-  // A random alphanumeric "warmup code" often appears alone on a line in the body.
-  if (/\bwarm[\s-]?up\b/i.test(input.subject)) return true;
-  // Reply came from one of our own sending domains → warmup-network chatter,
-  // not a prospect.
+  if (headerMarkers.some((m) => headersLc.includes(m))) return true;
+
+  // 2) Mail FROM one of our own fleet domains is warmup-network chatter.
   const fromDomain = input.fromEmail.split("@")[1]?.toLowerCase() ?? "";
   if (fromDomain && input.fleetDomains.has(fromDomain)) return true;
+
+  // 3) Warmup subject/body fingerprints (bot-to-bot templated content).
+  const text = `${input.subject}\n${input.body}`.toLowerCase();
+  if (/\bwarm[\s-]?up\b/.test(text)) return true;
+  // Instantly/other warmup bodies commonly carry a bare tracking token line
+  // like "ref: 8f3ka9" or a lone uppercase code — combined with a very short
+  // body and generic subject.
+  const bodyLen = input.body.trim().length;
+  const genericSubject =
+    /^(re:\s*)?(quick (question|update|note|catch[- ]?up)|checking in|following up|touching base|hello|hi there|great (to|meeting)|thanks|thank you|got it|sounds good|confirming)\b/.test(
+      input.subject.trim().toLowerCase(),
+    );
+  if (bodyLen > 0 && bodyLen < 220 && genericSubject) {
+    // Short + generic + a token-ish string present → warmup.
+    if (/\b(ref|id|code|token)[:#]?\s*[a-z0-9]{5,}\b/i.test(input.body) || /^[A-Z0-9]{6,}$/m.test(input.body)) {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -112,7 +131,7 @@ export async function syncInbox(): Promise<string> {
         const body = (parsed.text ?? "").trim();
         const headers = [...(parsed.headerLines ?? [])].map((h) => h.line).join("\n");
 
-        const warmup = isWarmupMessage({ subject, body, headers, fromEmail, fleetDomains });
+        const warmup = isWarmupMessage({ subject, body, headers, fromEmail, toEmail, fleetDomains });
         if (warmup) {
           warmupSkipped++;
           // Record minimally so we don't re-fetch, but flagged and hidden.
