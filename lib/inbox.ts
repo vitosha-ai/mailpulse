@@ -42,6 +42,33 @@ async function imapConfig() {
 // A message is warmup noise if it carries a known warmup marker or comes from
 // a mailbox that belongs to our own fleet (warmup network chatter). Instantly
 // stamps warmup mail with an identifier in the body/subject/headers.
+// The decisive warmup signature (verified against the live master inbox):
+// warmup tools append a hidden token block after a "|" in the subject —
+// random words joined by _ / -- / . and/or a short uppercase alphanumeric
+// code, e.g. "… | blind--hundred  H6791SG", "… |  DAVM9X", "… | mud__roof".
+// Real prospect replies do not carry this. Exported so it can also reclassify
+// already-stored messages.
+export function hasWarmupTag(subject: string): boolean {
+  const i = subject.lastIndexOf("|");
+  if (i < 0) return false;
+  const tail = subject.slice(i + 1).trim();
+  if (!tail) return false;
+  const compact = tail.replace(/\s+/g, "");
+  // lone uppercase/alphanumeric code (DAVM9X, TQNZ5, H6791SG)
+  if (/^[A-Z0-9]{4,12}$/.test(compact)) return true;
+  // token joiners: underscore or double-hyphen
+  if (/_|--/.test(tail)) return true;
+  // a long lowercase gibberish word (saidspentplanextra)
+  if (/^[a-z]{10,}$/.test(compact)) return true;
+  // lowercase gibberish blob followed by a short uppercase code (…extra H67)
+  if (/^[a-z]{6,}[A-Z0-9]{2,}$/.test(compact)) return true;
+  // lowercase words ending in an uppercase code (half.love H6791SG)
+  if (/^[a-z].*[A-Z0-9]{4,}$/.test(compact)) return true;
+  // dotted lowercase tokens (community.customs, half.love)
+  if (/^[a-z]+\.[a-z]/.test(compact)) return true;
+  return false;
+}
+
 function isWarmupMessage(input: {
   subject: string;
   body: string;
@@ -50,8 +77,11 @@ function isWarmupMessage(input: {
   toEmail: string;
   fleetDomains: Set<string>;
 }): boolean {
+  // 1) The subject warmup token — the strongest, most reliable signal.
+  if (hasWarmupTag(input.subject)) return true;
+
+  // 2) Warmup tools also stamp identifiable headers.
   const headersLc = input.headers.toLowerCase();
-  // 1) Warmup tools stamp identifiable headers. This is the strongest signal.
   const headerMarkers = [
     "x-instantly",
     "x-warmup",
@@ -66,28 +96,35 @@ function isWarmupMessage(input: {
   ];
   if (headerMarkers.some((m) => headersLc.includes(m))) return true;
 
-  // 2) Mail FROM one of our own fleet domains is warmup-network chatter.
+  // 3) Mail FROM one of our own fleet domains is warmup-network chatter.
   const fromDomain = input.fromEmail.split("@")[1]?.toLowerCase() ?? "";
   if (fromDomain && input.fleetDomains.has(fromDomain)) return true;
 
-  // 3) Warmup subject/body fingerprints (bot-to-bot templated content).
-  const text = `${input.subject}\n${input.body}`.toLowerCase();
-  if (/\bwarm[\s-]?up\b/.test(text)) return true;
-  // Instantly/other warmup bodies commonly carry a bare tracking token line
-  // like "ref: 8f3ka9" or a lone uppercase code — combined with a very short
-  // body and generic subject.
-  const bodyLen = input.body.trim().length;
-  const genericSubject =
-    /^(re:\s*)?(quick (question|update|note|catch[- ]?up)|checking in|following up|touching base|hello|hi there|great (to|meeting)|thanks|thank you|got it|sounds good|confirming)\b/.test(
-      input.subject.trim().toLowerCase(),
-    );
-  if (bodyLen > 0 && bodyLen < 220 && genericSubject) {
-    // Short + generic + a token-ish string present → warmup.
-    if (/\b(ref|id|code|token)[:#]?\s*[a-z0-9]{5,}\b/i.test(input.body) || /^[A-Z0-9]{6,}$/m.test(input.body)) {
-      return true;
-    }
-  }
+  // 4) Literal "warmup" mention.
+  if (/\bwarm[\s-]?up\b/.test(`${input.subject}\n${input.body}`.toLowerCase())) return true;
+
   return false;
+}
+
+// Re-scan already-stored messages and flag any that match the warmup signature
+// (used after tightening the filter, so old imports get cleaned too).
+export function reclassifyWarmup(): number {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT uid, subject FROM inbox_messages WHERE is_warmup = 0")
+    .all() as { uid: number; subject: string }[];
+  const flag = db.prepare("UPDATE inbox_messages SET is_warmup = 1 WHERE uid = ?");
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      if (hasWarmupTag(r.subject || "")) {
+        flag.run(r.uid);
+        n++;
+      }
+    }
+  });
+  tx();
+  return n;
 }
 
 // Lightweight intent classifier for real replies.
@@ -183,7 +220,9 @@ export async function syncInbox(): Promise<string> {
       lock.release();
     }
     await client.logout();
-    const msg = `${stored} new replies, ${warmupSkipped} warmup filtered`;
+    // Belt-and-braces: re-scan for any warmup that slipped past the live filter.
+    const recl = reclassifyWarmup();
+    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered`;
     db.prepare("INSERT INTO sync_log (kind, ok, detail, finished_at) VALUES ('inbox', 1, ?, datetime('now'))").run(msg);
     return msg;
   } catch (e) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { syncInbox } from "@/lib/inbox";
+import { syncInbox, reclassifyWarmup } from "@/lib/inbox";
 
 // GET /api/inbox — filters: category, q, unseen, flagged, pinned; sort; group.
 export async function GET(request: NextRequest) {
@@ -90,6 +90,10 @@ export async function POST(request: NextRequest) {
 
   if (body.action === "sync") {
     return NextResponse.json({ ok: true, result: await syncInbox() });
+  }
+  if (body.action === "reclassify") {
+    const n = reclassifyWarmup();
+    return NextResponse.json({ ok: true, reclassified: n });
   }
   if (typeof body.uid !== "number") {
     return NextResponse.json({ error: "uid required" }, { status: 400 });
