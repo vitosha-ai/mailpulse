@@ -47,6 +47,10 @@ export async function GET(request: NextRequest) {
     .prepare(
       `SELECT m.uid, m.from_email, m.from_name, m.to_email, m.subject, m.preview, m.body,
               m.received_at, m.category, m.seen, m.flagged, m.pinned,
+              COALESCE(
+                (SELECT provider FROM senders s WHERE s.email = m.to_email),
+                (SELECT provider FROM senders s WHERE s.domain = substr(m.to_email, instr(m.to_email, '@') + 1) LIMIT 1)
+              ) AS esp,
               (SELECT GROUP_CONCAT(mt.tag, ',') FROM inbox_message_tags mt WHERE mt.uid = m.uid) AS tags
        FROM inbox_messages m WHERE ${where.join(" AND ")}
        ORDER BY ${orderBy} LIMIT 500`,

@@ -16,6 +16,29 @@ type Message = {
   flagged: number;
   pinned: number;
   tags: string[];
+  esp: string | null;
+};
+
+// mm/dd/yyyy hh:mm AM/PM (12-hour) from an ISO/SQL timestamp.
+function fmtDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+  if (isNaN(d.getTime())) return iso;
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  let h = d.getHours();
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}/${dd}/${yyyy} ${String(h).padStart(2, "0")}:${min} ${ampm}`;
+}
+
+const ESP_META: Record<string, { label: string; cls: string }> = {
+  maildoso: { label: "Maildoso", cls: "bg-violet-100 text-violet-700 ring-violet-300" },
+  microsoft: { label: "Microsoft", cls: "bg-brand/10 text-brand ring-brand/30" },
+  google: { label: "Google", cls: "bg-red-100 text-red-700 ring-red-300" },
+  other: { label: "Other", cls: "bg-slate-100 text-slate-500 ring-slate-300" },
 };
 
 type Group = { key: string; label: string; uids: number[] };
@@ -177,6 +200,17 @@ export default function Inbox() {
                 <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${CAT_BADGE[m.category] ?? CAT_BADGE.other}`}>
                   {m.category}
                 </span>
+                {(() => {
+                  const e = ESP_META[m.esp ?? "other"] ?? ESP_META.other;
+                  return (
+                    <span
+                      title={`Reply came to a ${e.label} mailbox: ${m.to_email}`}
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${e.cls}`}
+                    >
+                      {e.label}
+                    </span>
+                  );
+                })()}
               </span>
               <span className="mt-0.5 block truncate text-sm text-slate-700">{m.subject || "(no subject)"}</span>
               <span className="mt-0.5 block truncate text-xs text-slate-400">{m.preview}</span>
@@ -191,7 +225,7 @@ export default function Inbox() {
               )}
             </span>
             <span className="shrink-0 whitespace-nowrap font-mono text-xs text-slate-400">
-              {m.received_at?.replace("T", " ").slice(0, 16)}
+              {fmtDate(m.received_at)}
             </span>
           </button>
           {/* tag + not-a-reply */}
@@ -394,8 +428,14 @@ export default function Inbox() {
             </div>
             <div className="mb-4 space-y-1 border-b border-slate-200 pb-4 text-sm">
               <p><span className="text-slate-400">From:</span> <b className="text-slate-800">{open.from_name}</b> &lt;{open.from_email}&gt;</p>
-              <p><span className="text-slate-400">Replied to:</span> {open.to_email}</p>
-              <p><span className="text-slate-400">When:</span> {open.received_at?.replace("T", " ").slice(0, 16)}</p>
+              <p>
+                <span className="text-slate-400">Replied to:</span> {open.to_email}{" "}
+                {(() => {
+                  const e = ESP_META[open.esp ?? "other"] ?? ESP_META.other;
+                  return <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ${e.cls}`}>{e.label}</span>;
+                })()}
+              </p>
+              <p><span className="text-slate-400">When:</span> {fmtDate(open.received_at)}</p>
               <div className="flex flex-wrap items-center gap-1.5 pt-2">
                 <span className="text-slate-400">Tags:</span>
                 {open.tags.map((t) => (
