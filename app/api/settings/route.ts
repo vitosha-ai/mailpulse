@@ -7,6 +7,11 @@ const KEYS = [
   "smartlead_api_key",
   "trulyinbox_api_key",
   "spamhaus_dqs_key",
+  "maildoso_api_key",
+  "imap_host",
+  "imap_port",
+  "imap_user",
+  "imap_pass",
 ] as const;
 
 function mask(v: string | null): string | null {
@@ -14,9 +19,15 @@ function mask(v: string | null): string | null {
   return v.length <= 8 ? "••••" : `${v.slice(0, 4)}••••${v.slice(-4)}`;
 }
 
+// Host/port/user aren't secrets — show them in full so they're easy to verify.
+const PLAIN = new Set(["imap_host", "imap_port", "imap_user"]);
+
 export async function GET() {
   const out: Record<string, string | null> = {};
-  for (const k of KEYS) out[k] = mask(getSetting(k));
+  for (const k of KEYS) {
+    const v = getSetting(k);
+    out[k] = PLAIN.has(k) ? v : mask(v);
+  }
   return NextResponse.json(out);
 }
 

@@ -313,6 +313,12 @@ export default function Dashboard() {
               ⤓ Export view ({matched})
             </button>
             <a
+              href="/inbox"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+            >
+              ✉ Inbox
+            </a>
+            <a
               href="/settings"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
             >

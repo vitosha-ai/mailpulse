@@ -8,6 +8,7 @@ export async function register() {
   if (!hours || Number.isNaN(hours)) return;
 
   const { fullSync } = await import("./lib/sync");
+  const { syncInbox } = await import("./lib/inbox");
   let running = false;
   const run = async () => {
     if (running) return; // never overlap syncs
@@ -25,4 +26,17 @@ export async function register() {
   setTimeout(run, 2 * 60_000); // first sync 2 minutes after boot
   setInterval(run, hours * 3_600_000);
   console.log(`[auto-sync] scheduled every ${hours}h`);
+
+  // The master inbox refreshes more often than the 4-hour fleet sync so
+  // replies show up promptly. Every 15 minutes; safe no-op until configured.
+  const inboxRun = async () => {
+    try {
+      const r = await syncInbox();
+      if (!r.startsWith("Master inbox not configured")) console.log("[inbox-sync]", r);
+    } catch (e) {
+      console.error("[inbox-sync] failed:", e instanceof Error ? e.message : e);
+    }
+  };
+  setTimeout(inboxRun, 90_000);
+  setInterval(inboxRun, 15 * 60_000);
 }

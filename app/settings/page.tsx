@@ -28,6 +28,11 @@ const FIELDS = [
     label: "Spamhaus DQS key (free)",
     help: "Sign up free at spamhaus.com → Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",
   },
+  {
+    key: "maildoso_api_key",
+    label: "Maildoso API key (for the Inbox)",
+    help: "Maildoso → Settings → API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies — warmup mail is filtered out. Easiest option; no IMAP details needed.",
+  },
 ] as const;
 
 export default function Settings() {

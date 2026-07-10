@@ -133,6 +133,24 @@ function migrate(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts(resolved_at) WHERE resolved_at IS NULL;
 
+    CREATE TABLE IF NOT EXISTS inbox_messages (
+      uid INTEGER PRIMARY KEY,          -- IMAP UID (stable per mailbox)
+      message_id TEXT,
+      from_email TEXT,
+      from_name TEXT,
+      to_email TEXT,                    -- which of our senders it replied to
+      subject TEXT,
+      preview TEXT,                     -- first ~300 chars of body text
+      body TEXT,                        -- full plain-text body
+      received_at TEXT,
+      category TEXT,                    -- interested | out-of-office | unsubscribe | auto-reply | other
+      is_warmup INTEGER NOT NULL DEFAULT 0,
+      seen INTEGER NOT NULL DEFAULT 0,
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_inbox_received ON inbox_messages(received_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_inbox_category ON inbox_messages(category);
+
     CREATE TABLE IF NOT EXISTS sync_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       started_at TEXT NOT NULL DEFAULT (datetime('now')),
