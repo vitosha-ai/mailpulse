@@ -1,75 +1,69 @@
 import { NextResponse } from "next/server";
+import { ImapFlow } from "imapflow";
 import { getSetting } from "@/lib/db";
 
-// TEMPORARY diagnostic: probes Maildoso API bases/paths with the stored token
-// and reports status + response shape (values redacted) so we can wire the
-// exact endpoint. Remove after the inbox connection is confirmed.
+// TEMPORARY: discovers the master-inbox creds from Maildoso, then tries IMAP
+// login against candidate hosts to find the working one. Remove after wiring.
 export async function GET() {
   const token = getSetting("maildoso_api_key");
   if (!token) return NextResponse.json({ error: "no maildoso_api_key stored" });
 
-  const bases = [
-    "https://api.maildoso.com/v1",
-    "https://app.maildoso.com/api/v1",
-    "https://api.maildoso.com",
-    "https://app.maildoso.com/api",
-  ];
-  const paths = [
-    "/user/forwarding-lookup",
-    "/user/accounts/forwarding",
-    "/user/accounts-lookup",
-    "/user/accounts",
-    "/user/me",
-  ];
+  // 1) Master account creds from Maildoso.
+  let user = "";
+  let pass = "";
+  try {
+    const res = await fetch("https://api.maildoso.com/v1/user/forwarding-lookup?offset=0&limit=50", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = await res.json();
+    const master =
+      (j.items ?? []).find((a: Record<string, unknown>) => a.assignment === "MASTER") ?? (j.items ?? [])[0];
+    user = String(master?.email ?? "");
+    pass = String(master?.password ?? "");
+  } catch (e) {
+    return NextResponse.json({ error: "forwarding-lookup failed", detail: String(e) });
+  }
+  if (!user || !pass) return NextResponse.json({ error: "no master creds found" });
 
-  const redact = (v: unknown): unknown => {
-    if (Array.isArray(v)) return v.slice(0, 1).map(redact);
-    if (v && typeof v === "object") {
-      const o: Record<string, unknown> = {};
-      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-        if (/pass|token|secret/i.test(k)) o[k] = "«redacted»";
-        else if (typeof val === "object") o[k] = redact(val);
-        else o[k] = val;
-      }
-      return o;
-    }
-    return v;
-  };
-
-  void bases;
-  void paths;
-  const base = "https://api.maildoso.com/v1";
-  const auth = { Authorization: `Bearer ${token}` };
-  const attempts: { label: string; method: string; url: string; body?: unknown }[] = [
-    { label: "accounts-lookup GET +params", method: "GET", url: `${base}/user/accounts-lookup?offset=0&limit=50` },
-    { label: "accounts-lookup GET limit", method: "GET", url: `${base}/user/accounts-lookup?limit=50` },
-    { label: "accounts-lookup POST", method: "POST", url: `${base}/user/accounts-lookup`, body: { offset: 0, limit: 50 } },
-    { label: "accounts POST", method: "POST", url: `${base}/user/accounts`, body: { offset: 0, limit: 50 } },
-    { label: "forwarding-lookup GET", method: "GET", url: `${base}/user/forwarding-lookup?offset=0&limit=50` },
+  // 2) Try IMAP login against candidate hosts/ports.
+  const hosts = [
+    "mail.maildoso.email",
+    "imap.maildoso.email",
+    "_dc-mx.c5bbd1b0b133.maildoso.email",
+    "185.221.223.123",
+    "5.255.104.126",
+    "mx.c5bbd1b0b133.maildoso.email",
   ];
+  const ports = [993, 143];
+  const out: Record<string, unknown>[] = [];
 
-  const results: Record<string, unknown>[] = [];
-  for (const a of attempts) {
-    try {
-      const res = await fetch(a.url, {
-        method: a.method,
-        headers: { ...auth, ...(a.body ? { "Content-Type": "application/json" } : {}) },
-        body: a.body ? JSON.stringify(a.body) : undefined,
+  for (const host of hosts) {
+    for (const port of ports) {
+      const client = new ImapFlow({
+        host,
+        port,
+        secure: port === 993,
+        auth: { user, pass },
+        logger: false,
+        // Short, tolerant — we're just probing reachability + login.
+        socketTimeout: 8000,
+        greetingTimeout: 6000,
+        connectionTimeout: 6000,
+        tls: { rejectUnauthorized: false },
       });
-      const text = await res.text();
-      let shape: unknown = text.slice(0, 300);
-      if (res.ok) {
+      try {
+        await client.connect();
+        const mbox = await client.status("INBOX", { messages: true });
+        await client.logout();
+        out.push({ host, port, result: "LOGIN OK", messages: mbox.messages });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        out.push({ host, port, result: msg.slice(0, 120) });
         try {
-          // Keep imap host/port visible; only redact secrets.
-          shape = redact(JSON.parse(text));
-        } catch {
-          /* keep text */
-        }
+          await client.close();
+        } catch {}
       }
-      results.push({ label: a.label, status: res.status, shape });
-    } catch (e) {
-      results.push({ label: a.label, error: e instanceof Error ? e.message : String(e) });
     }
   }
-  return NextResponse.json({ results });
+  return NextResponse.json({ user, probes: out });
 }
