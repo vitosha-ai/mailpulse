@@ -9,6 +9,7 @@ export async function register() {
 
   const { fullSync } = await import("./lib/sync");
   const { syncInbox } = await import("./lib/inbox");
+  const { syncGoogleInbox } = await import("./lib/google");
   let running = false;
   const run = async () => {
     if (running) return; // never overlap syncs
@@ -35,6 +36,12 @@ export async function register() {
       if (!r.startsWith("Master inbox not configured")) console.log("[inbox-sync]", r);
     } catch (e) {
       console.error("[inbox-sync] failed:", e instanceof Error ? e.message : e);
+    }
+    try {
+      const g = await syncGoogleInbox();
+      if (g !== "Google not configured") console.log("[google-inbox]", g);
+    } catch (e) {
+      console.error("[google-inbox] failed:", e instanceof Error ? e.message : e);
     }
   };
   setTimeout(inboxRun, 90_000);

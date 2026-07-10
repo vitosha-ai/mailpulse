@@ -122,6 +122,43 @@ export default function Settings() {
           ))}
         </div>
 
+        {/* Google Workspace inbox reader */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <label className="text-sm font-semibold text-slate-900">Google Workspace — inbox reader</label>
+          {masked.google_sa_json ? (
+            <span className="ml-2 font-mono text-[11px] uppercase tracking-wider text-emerald-600">✓ configured</span>
+          ) : null}
+          <p className="mb-3 mt-1 text-xs leading-relaxed text-slate-500">
+            Paste the <b>service-account JSON key</b> (the file you downloaded from Google Cloud) to read this
+            workspace&apos;s mailbox replies centrally. Then set the workspace <b>domains</b> below (comma-separated,
+            e.g. <code>vitoshaamplify.com, vitoshaboost.com</code>) so MailPulse knows which mailboxes it covers.
+          </p>
+          <textarea
+            value={values.google_sa_json ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, google_sa_json: e.target.value }))}
+            placeholder={masked.google_sa_json ? "Saved — paste new JSON to replace" : '{ "type": "service_account", "client_email": "...", "private_key": "..." }'}
+            rows={4}
+            className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
+          />
+          <div className="flex gap-2">
+            <input
+              value={values.google_domains ?? masked.google_domains ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, google_domains: e.target.value }))}
+              placeholder="workspace domains, comma-separated"
+              className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
+            />
+            <button
+              onClick={async () => {
+                if (values.google_sa_json) await save("google_sa_json");
+                await save("google_domains");
+              }}
+              className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
+            >
+              {saved === "google_domains" || saved === "google_sa_json" ? "Saved ✓" : "Save"}
+            </button>
+          </div>
+        </div>
+
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
           <p className="font-mono text-[11px] uppercase tracking-widest text-slate-400">
             Reminder — one-time purchases

@@ -134,7 +134,9 @@ function migrate(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_alerts_open ON alerts(resolved_at) WHERE resolved_at IS NULL;
 
     CREATE TABLE IF NOT EXISTS inbox_messages (
-      uid INTEGER PRIMARY KEY,          -- IMAP UID (stable per mailbox)
+      uid INTEGER PRIMARY KEY,          -- surrogate id (IMAP uid for maildoso; offset-based for api sources)
+      source TEXT NOT NULL DEFAULT 'maildoso', -- maildoso | google | microsoft
+      ext_id TEXT,                      -- provider message id (IMAP uid / Gmail id / Graph id)
       message_id TEXT,
       from_email TEXT,
       from_name TEXT,
@@ -194,6 +196,8 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN retire_requested TEXT", // timestamp when user asked for graceful pause
     "ALTER TABLE senders ADD COLUMN sh_zero_days INTEGER DEFAULT 0",
     "ALTER TABLE senders ADD COLUMN sh_zero_checked TEXT", // date of last zero-day increment
+    "ALTER TABLE inbox_messages ADD COLUMN source TEXT NOT NULL DEFAULT 'maildoso'",
+    "ALTER TABLE inbox_messages ADD COLUMN ext_id TEXT",
   ];
   for (const stmt of addColumns) {
     try {
@@ -201,6 +205,15 @@ function migrate(db: Database.Database) {
     } catch {
       // column already exists
     }
+  }
+
+  // Backfill ext_id for existing (maildoso/IMAP) rows, then enforce dedup by
+  // (source, ext_id) so multiple mail sources coexist without id collisions.
+  try {
+    db.exec("UPDATE inbox_messages SET ext_id = CAST(uid AS TEXT) WHERE ext_id IS NULL");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_srcext ON inbox_messages(source, ext_id)");
+  } catch {
+    // best effort
   }
 }
 

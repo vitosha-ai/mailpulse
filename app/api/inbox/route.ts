@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { syncInbox, reclassifyWarmup } from "@/lib/inbox";
+import { syncGoogleInbox } from "@/lib/google";
 
 // GET /api/inbox — filters: category, q, unseen, flagged, pinned; sort; group.
 export async function GET(request: NextRequest) {
@@ -113,7 +114,13 @@ export async function POST(request: NextRequest) {
   const db = getDb();
 
   if (body.action === "sync") {
-    return NextResponse.json({ ok: true, result: await syncInbox() });
+    // Read every configured mail source into the one inbox.
+    const maildoso = await syncInbox();
+    const google = await syncGoogleInbox();
+    return NextResponse.json({ ok: true, result: [maildoso, google].filter((r) => !/not configured/.test(r)).join(" · ") || maildoso });
+  }
+  if (body.action === "sync-google") {
+    return NextResponse.json({ ok: true, result: await syncGoogleInbox() });
   }
   if (body.action === "reclassify") {
     const n = reclassifyWarmup();

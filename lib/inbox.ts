@@ -129,6 +129,79 @@ export function reclassifyWarmup(): number {
   return n;
 }
 
+export function getFleetDomains(): Set<string> {
+  const db = getDb();
+  return new Set(
+    (db.prepare("SELECT DISTINCT domain FROM senders WHERE domain != ''").all() as { domain: string }[]).map(
+      (r) => r.domain.toLowerCase(),
+    ),
+  );
+}
+
+const SOURCE_OFFSET: Record<string, number> = { google: 2_000_000_000_000, microsoft: 3_000_000_000_000 };
+
+// Shared insert used by every mail source (IMAP, Gmail, Graph). Applies the
+// warmup filter, categorizes real replies, and dedupes by (source, ext_id).
+// Returns what happened so callers can count.
+export function storeMessage(opts: {
+  source: "maildoso" | "google" | "microsoft";
+  extId: string;
+  uid?: number; // provided for maildoso (the IMAP uid); computed otherwise
+  messageId: string | null;
+  fromEmail: string;
+  fromName: string;
+  toEmail: string;
+  subject: string;
+  body: string;
+  headers: string;
+  date: string;
+  fleetDomains: Set<string>;
+}): "stored" | "warmup" | "skip" {
+  const db = getDb();
+  const warmup = isWarmupMessage({
+    subject: opts.subject,
+    body: opts.body,
+    headers: opts.headers,
+    fromEmail: opts.fromEmail,
+    toEmail: opts.toEmail,
+    fleetDomains: opts.fleetDomains,
+  });
+
+  let uid = opts.uid;
+  if (uid == null) {
+    const offset = SOURCE_OFFSET[opts.source] ?? 1;
+    const row = db
+      .prepare("SELECT COALESCE(MAX(uid), ?) AS m FROM inbox_messages WHERE source = ?")
+      .get(offset, opts.source) as { m: number };
+    uid = Number(row.m) + 1;
+  }
+
+  const info = db
+    .prepare(
+      `INSERT INTO inbox_messages
+        (uid, source, ext_id, message_id, from_email, from_name, to_email, subject, preview, body, received_at, category, is_warmup, seen)
+       VALUES (@uid, @source, @ext_id, @message_id, @from_email, @from_name, @to_email, @subject, @preview, @body, @received_at, @category, @is_warmup, 0)
+       ON CONFLICT(source, ext_id) DO NOTHING`,
+    )
+    .run({
+      uid,
+      source: opts.source,
+      ext_id: opts.extId,
+      message_id: opts.messageId,
+      from_email: opts.fromEmail,
+      from_name: opts.fromName,
+      to_email: opts.toEmail,
+      subject: warmup ? opts.subject.slice(0, 200) : opts.subject,
+      preview: warmup ? null : opts.body.slice(0, 300),
+      body: warmup ? null : opts.body,
+      received_at: opts.date,
+      category: warmup ? null : categorize(opts.subject, opts.body),
+      is_warmup: warmup ? 1 : 0,
+    });
+  if (info.changes === 0) return "skip"; // already had it
+  return warmup ? "warmup" : "stored";
+}
+
 // Lightweight intent classifier for real replies.
 export function categorize(subject: string, body: string): string {
   const t = `${subject} ${body}`.toLowerCase();
@@ -148,11 +221,7 @@ export async function syncInbox(): Promise<string> {
   const cfg = await imapConfig();
   if (!cfg) return "Master inbox not configured — add a Maildoso API key or IMAP details in Settings";
 
-  const fleetDomains = new Set(
-    (db.prepare("SELECT DISTINCT domain FROM senders WHERE domain != ''").all() as { domain: string }[]).map(
-      (r) => r.domain.toLowerCase(),
-    ),
-  );
+  const fleetDomains = getFleetDomains();
 
   const client = new ImapFlow(cfg);
   let stored = 0;
@@ -161,62 +230,32 @@ export async function syncInbox(): Promise<string> {
     await client.connect();
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Highest UID we already have — only fetch newer messages.
-      const maxRow = db.prepare("SELECT MAX(uid) AS m FROM inbox_messages").get() as { m: number | null };
+      // Highest maildoso UID we already have — only fetch newer messages.
+      const maxRow = db
+        .prepare("SELECT MAX(uid) AS m FROM inbox_messages WHERE source = 'maildoso'")
+        .get() as { m: number | null };
       const since = (maxRow.m ?? 0) + 1;
-
-      const insert = db.prepare(`
-        INSERT INTO inbox_messages
-          (uid, message_id, from_email, from_name, to_email, subject, preview, body, received_at, category, is_warmup, seen)
-        VALUES (@uid, @message_id, @from_email, @from_name, @to_email, @subject, @preview, @body, @received_at, @category, @is_warmup, 0)
-        ON CONFLICT(uid) DO NOTHING
-      `);
 
       // Fetch source for new UIDs; range "since:*" grabs everything newer.
       for await (const msg of client.fetch(`${since}:*`, { uid: true, source: true })) {
         const parsed = await simpleParser(msg.source as Buffer);
-        const fromEmail = parsed.from?.value?.[0]?.address?.toLowerCase() ?? "";
-        const fromName = parsed.from?.value?.[0]?.name ?? "";
-        const toEmail =
-          (Array.isArray(parsed.to) ? parsed.to[0] : parsed.to)?.value?.[0]?.address?.toLowerCase() ?? "";
-        const subject = parsed.subject ?? "";
-        const body = (parsed.text ?? "").trim();
-        const headers = [...(parsed.headerLines ?? [])].map((h) => h.line).join("\n");
-
-        const warmup = isWarmupMessage({ subject, body, headers, fromEmail, toEmail, fleetDomains });
-        if (warmup) {
-          warmupSkipped++;
-          // Record minimally so we don't re-fetch, but flagged and hidden.
-          insert.run({
-            uid: Number(msg.uid),
-            message_id: parsed.messageId ?? null,
-            from_email: fromEmail,
-            from_name: fromName,
-            to_email: toEmail,
-            subject: subject.slice(0, 200),
-            preview: null,
-            body: null,
-            received_at: (parsed.date ?? new Date()).toISOString(),
-            category: null,
-            is_warmup: 1,
-          });
-          continue;
-        }
-
-        insert.run({
+        const r = storeMessage({
+          source: "maildoso",
           uid: Number(msg.uid),
-          message_id: parsed.messageId ?? null,
-          from_email: fromEmail,
-          from_name: fromName,
-          to_email: toEmail,
-          subject,
-          preview: body.slice(0, 300),
-          body,
-          received_at: (parsed.date ?? new Date()).toISOString(),
-          category: categorize(subject, body),
-          is_warmup: 0,
+          extId: String(msg.uid),
+          messageId: parsed.messageId ?? null,
+          fromEmail: parsed.from?.value?.[0]?.address?.toLowerCase() ?? "",
+          fromName: parsed.from?.value?.[0]?.name ?? "",
+          toEmail:
+            (Array.isArray(parsed.to) ? parsed.to[0] : parsed.to)?.value?.[0]?.address?.toLowerCase() ?? "",
+          subject: parsed.subject ?? "",
+          body: (parsed.text ?? "").trim(),
+          headers: [...(parsed.headerLines ?? [])].map((h) => h.line).join("\n"),
+          date: (parsed.date ?? new Date()).toISOString(),
+          fleetDomains,
         });
-        stored++;
+        if (r === "warmup") warmupSkipped++;
+        else if (r === "stored") stored++;
       }
     } finally {
       lock.release();
