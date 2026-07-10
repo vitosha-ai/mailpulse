@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
 import { getSetting } from "@/lib/db";
 
-// TEMPORARY: find the IMAP host by probing Maildoso's sequencer-export /
-// per-account endpoints (those hand out IMAP host/port for tool connections).
+// TEMPORARY: broad sweep for any Maildoso endpoint exposing the IMAP host.
 export async function GET() {
   const token = getSetting("maildoso_api_key");
   if (!token) return NextResponse.json({ error: "no maildoso_api_key stored" });
   const base = "https://api.maildoso.com/v1";
   const auth = { Authorization: `Bearer ${token}` };
 
-  // A known attached mailbox id from forwarding-lookup.
   let mailboxId: number | null = null;
-  let mailboxEmail = "";
   try {
     const r = await fetch(`${base}/user/forwarding-lookup?offset=0&limit=50`, { headers: auth });
     const j = await r.json();
-    const mb = (j.items ?? [])[0]?.attached_mailboxes?.[0];
-    mailboxId = mb?.id ?? null;
-    mailboxEmail = mb?.email_account ?? "";
+    mailboxId = (j.items ?? [])[0]?.attached_mailboxes?.[0]?.id ?? null;
   } catch {}
 
   const redact = (v: unknown): unknown => {
@@ -33,23 +28,21 @@ export async function GET() {
     return v;
   };
 
-  const attempts: { label: string; method: string; url: string; body?: unknown }[] = [
-    { label: "sequencers-export GET", method: "GET", url: `${base}/user/sequencers/export` },
-    { label: "sequencers-export POST all", method: "POST", url: `${base}/user/sequencers/export`, body: { account_ids: mailboxId ? [mailboxId] : [] } },
-    { label: "sequencers-export POST emails", method: "POST", url: `${base}/user/sequencers/export`, body: mailboxEmail ? [mailboxEmail] : [] },
-    { label: "sequencers-export POST bare-list", method: "POST", url: `${base}/user/sequencers/export`, body: mailboxId ? [mailboxId] : [] },
-    { label: "account detail", method: "GET", url: mailboxId ? `${base}/user/accounts/${mailboxId}` : `${base}/user/accounts` },
-    { label: "accounts POST list", method: "POST", url: `${base}/user/accounts`, body: mailboxId ? [mailboxId] : [] },
+  const urls = [
+    `${base}/user/accounts-lookup?ids=${mailboxId}`,
+    `${base}/user/accounts-lookup?account_ids=${mailboxId}`,
+    `${base}/user/accounts-lookup?id=${mailboxId}`,
+    `${base}/user/accounts-export`,
+    `${base}/user/accounts/export`,
+    `${base}/user/sequencers`,
+    `${base}/user/domains`,
+    `${base}/user/domains-lookup?offset=0&limit=50`,
   ];
 
   const results: Record<string, unknown>[] = [];
-  for (const a of attempts) {
+  for (const url of urls) {
     try {
-      const res = await fetch(a.url, {
-        method: a.method,
-        headers: { ...auth, ...(a.body !== undefined ? { "Content-Type": "application/json" } : {}) },
-        body: a.body !== undefined ? JSON.stringify(a.body) : undefined,
-      });
+      const res = await fetch(url, { headers: auth });
       const text = await res.text();
       let shape: unknown = text.slice(0, 400);
       if (res.ok) {
@@ -57,10 +50,12 @@ export async function GET() {
           shape = redact(JSON.parse(text));
         } catch {}
       }
-      results.push({ label: a.label, status: res.status, shape });
+      // Flag if the response mentions imap anywhere.
+      const hasImap = /imap/i.test(text);
+      results.push({ url: url.replace(base, ""), status: res.status, hasImap, shape });
     } catch (e) {
-      results.push({ label: a.label, error: e instanceof Error ? e.message : String(e) });
+      results.push({ url: url.replace(base, ""), error: e instanceof Error ? e.message : String(e) });
     }
   }
-  return NextResponse.json({ mailboxId, mailboxEmail, results });
+  return NextResponse.json({ mailboxId, results });
 }
