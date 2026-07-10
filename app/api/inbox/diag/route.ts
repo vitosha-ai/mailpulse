@@ -36,26 +36,39 @@ export async function GET() {
     return v;
   };
 
+  void bases;
+  void paths;
+  const base = "https://api.maildoso.com/v1";
+  const auth = { Authorization: `Bearer ${token}` };
+  const attempts: { label: string; method: string; url: string; body?: unknown }[] = [
+    { label: "accounts-lookup GET +params", method: "GET", url: `${base}/user/accounts-lookup?offset=0&limit=50` },
+    { label: "accounts-lookup GET limit", method: "GET", url: `${base}/user/accounts-lookup?limit=50` },
+    { label: "accounts-lookup POST", method: "POST", url: `${base}/user/accounts-lookup`, body: { offset: 0, limit: 50 } },
+    { label: "accounts POST", method: "POST", url: `${base}/user/accounts`, body: { offset: 0, limit: 50 } },
+    { label: "forwarding-lookup GET", method: "GET", url: `${base}/user/forwarding-lookup?offset=0&limit=50` },
+  ];
+
   const results: Record<string, unknown>[] = [];
-  for (const base of bases) {
-    for (const path of paths) {
-      try {
-        const res = await fetch(`${base}${path}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const text = await res.text();
-        let shape: unknown = text.slice(0, 200);
-        if (res.ok) {
-          try {
-            shape = redact(JSON.parse(text));
-          } catch {
-            /* keep text */
-          }
+  for (const a of attempts) {
+    try {
+      const res = await fetch(a.url, {
+        method: a.method,
+        headers: { ...auth, ...(a.body ? { "Content-Type": "application/json" } : {}) },
+        body: a.body ? JSON.stringify(a.body) : undefined,
+      });
+      const text = await res.text();
+      let shape: unknown = text.slice(0, 300);
+      if (res.ok) {
+        try {
+          // Keep imap host/port visible; only redact secrets.
+          shape = redact(JSON.parse(text));
+        } catch {
+          /* keep text */
         }
-        results.push({ url: `${base}${path}`, status: res.status, shape });
-      } catch (e) {
-        results.push({ url: `${base}${path}`, error: e instanceof Error ? e.message : String(e) });
       }
+      results.push({ label: a.label, status: res.status, shape });
+    } catch (e) {
+      results.push({ label: a.label, error: e instanceof Error ? e.message : String(e) });
     }
   }
   return NextResponse.json({ results });
