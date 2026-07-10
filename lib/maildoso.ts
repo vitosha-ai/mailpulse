@@ -1,76 +1,39 @@
 import { getSetting, setSetting } from "./db";
 
-// Maildoso API client — used only to auto-discover the master (forwarding)
-// inbox's IMAP credentials so the user doesn't have to find them by hand.
-// Docs: https://developers.maildoso.com (Personal Access Token, Bearer auth).
-const BASES = ["https://api.maildoso.com/v1", "https://app.maildoso.com/api/v1"];
+// Maildoso: the API gives us the master (forwarding) inbox email + password,
+// but NOT the IMAP host (its accounts-lookup endpoint currently 500s), so the
+// host comes from the imap_host setting, defaulting to Maildoso's known host.
+const FORWARDING_URL = "https://api.maildoso.com/v1/user/forwarding-lookup?offset=0&limit=50";
+const DEFAULT_IMAP_HOST = "imap.apollo.maildoso.com";
+const DEFAULT_IMAP_PORT = 993;
 
-type ImapCreds = { host: string; port: number; user: string; pass: string };
-
-function pluck(obj: Record<string, unknown>): ImapCreds | null {
-  // The forwarding/master account exposes an imap object + a password; the
-  // email is the @maildoso.email address. Shapes vary, so read tolerantly.
-  const email = String(obj.email ?? obj.forwarding_email ?? obj.address ?? "").toLowerCase();
-  const pass = String(obj.password ?? obj.imap_password ?? "");
-  const imap = (obj.imap ?? obj) as Record<string, unknown>;
-  const host = String(imap.imap_host ?? imap.host ?? "");
-  const port = Number(imap.port ?? imap.imap_port ?? 993);
-  if (email && pass && host) return { host, port, user: email, pass };
-  return null;
-}
-
-function findCreds(data: unknown): ImapCreds | null {
-  // Walk the response looking for the master (@maildoso.email) forwarding box.
-  const stack: unknown[] = [data];
-  const candidates: ImapCreds[] = [];
-  while (stack.length) {
-    const node = stack.pop();
-    if (Array.isArray(node)) {
-      stack.push(...node);
-      continue;
-    }
-    if (node && typeof node === "object") {
-      const obj = node as Record<string, unknown>;
-      const c = pluck(obj);
-      if (c) candidates.push(c);
-      stack.push(...Object.values(obj));
-    }
-  }
-  // Prefer the @maildoso.email master mailbox if present.
-  return candidates.find((c) => c.user.includes("@maildoso.")) ?? candidates[0] ?? null;
-}
+export type ImapCreds = { host: string; port: number; user: string; pass: string };
 
 export async function discoverMasterInboxImap(): Promise<ImapCreds | null> {
   const token = getSetting("maildoso_api_key");
   if (!token) return null;
-  // Verified against the Maildoso OpenAPI (July 2026): forwarding-lookup and
-  // accounts/forwarding return the master @maildoso.email box; accounts-lookup
-  // returns per-mailbox IMAP creds as a fallback.
-  const paths = [
-    "/user/forwarding-lookup",
-    "/user/accounts/forwarding",
-    "/user/accounts-lookup",
-    "/user/accounts",
-  ];
-  for (const base of BASES) {
-    for (const path of paths) {
-      try {
-        const res = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const creds = findCreds(data);
-        if (creds) {
-          // Cache into settings so later syncs skip discovery.
-          setSetting("imap_host", creds.host);
-          setSetting("imap_port", String(creds.port));
-          setSetting("imap_user", creds.user);
-          setSetting("imap_pass", creds.pass);
-          return creds;
-        }
-      } catch {
-        // try next
-      }
-    }
+
+  let user = "";
+  let pass = "";
+  try {
+    const res = await fetch(FORWARDING_URL, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { items?: Record<string, unknown>[] };
+    const items = j.items ?? [];
+    const master = items.find((a) => a.assignment === "MASTER") ?? items[0];
+    user = String(master?.email ?? "");
+    pass = String(master?.password ?? "");
+  } catch {
+    return null;
   }
-  return null;
+  if (!user || !pass) return null;
+
+  const host = getSetting("imap_host") || DEFAULT_IMAP_HOST;
+  const port = Number(getSetting("imap_port") || DEFAULT_IMAP_PORT);
+  // Cache the live credentials so a sync can run even if the API is briefly down.
+  setSetting("imap_user", user);
+  setSetting("imap_pass", pass);
+  if (!getSetting("imap_host")) setSetting("imap_host", host);
+  if (!getSetting("imap_port")) setSetting("imap_port", String(port));
+  return { host, port, user, pass };
 }

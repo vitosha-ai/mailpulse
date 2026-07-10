@@ -8,22 +8,35 @@ import { discoverMasterInboxImap } from "./maildoso";
 // fields or are auto-discovered from a Maildoso API token.
 
 async function imapConfig() {
-  let host = getSetting("imap_host");
-  let user = getSetting("imap_user");
-  let pass = getSetting("imap_pass");
-  let port = Number(getSetting("imap_port") ?? "993");
-  if (!host || !user || !pass) {
-    // Try to auto-discover from the Maildoso API token.
+  // With a Maildoso token, always refresh the master email + password from the
+  // API (the password can rotate); the host comes from settings/default.
+  if (getSetting("maildoso_api_key")) {
     const creds = await discoverMasterInboxImap();
     if (creds) {
-      host = creds.host;
-      user = creds.user;
-      pass = creds.pass;
-      port = creds.port;
+      return {
+        host: creds.host,
+        port: creds.port,
+        secure: creds.port === 993,
+        auth: { user: creds.user, pass: creds.pass },
+        logger: false as const,
+        tls: { rejectUnauthorized: false },
+      };
     }
   }
+  // Manual IMAP fallback.
+  const host = getSetting("imap_host");
+  const user = getSetting("imap_user");
+  const pass = getSetting("imap_pass");
+  const port = Number(getSetting("imap_port") ?? "993");
   if (!host || !user || !pass) return null;
-  return { host, port, secure: port === 993, auth: { user, pass }, logger: false as const };
+  return {
+    host,
+    port,
+    secure: port === 993,
+    auth: { user, pass },
+    logger: false as const,
+    tls: { rejectUnauthorized: false },
+  };
 }
 
 // A message is warmup noise if it carries a known warmup marker or comes from
