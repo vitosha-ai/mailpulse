@@ -54,16 +54,18 @@ export function hasWarmupTag(subject: string): boolean {
   const tail = subject.slice(i + 1).trim();
   if (!tail) return false;
   const compact = tail.replace(/\s+/g, "");
-  // lone uppercase/alphanumeric code (DAVM9X, TQNZ5, H6791SG)
-  if (/^[A-Z0-9]{4,12}$/.test(compact)) return true;
-  // token joiners: underscore or double-hyphen
+  // The warmup fingerprint: a mixed letter+digit code token like "DAVM9XE",
+  // "H6791SG", "TQNZ5F8". Real words ("UPDATE") lack digits; years ("2026")
+  // lack letters — so neither trips this.
+  const tokens = tail.split(/\s+/).filter(Boolean);
+  if (tokens.some((t) => t.length >= 5 && /^[A-Z0-9]+$/.test(t) && /[A-Z]/.test(t) && /[0-9]/.test(t)))
+    return true;
+  // token joiners: underscore or double-hyphen (blow_coat_avoid, blind--hundred)
   if (/_|--/.test(tail)) return true;
   // a long lowercase gibberish word (saidspentplanextra)
   if (/^[a-z]{10,}$/.test(compact)) return true;
-  // lowercase gibberish blob followed by a short uppercase code (…extra H67)
+  // lowercase gibberish blob followed by an uppercase code (…extra H6791SG)
   if (/^[a-z]{6,}[A-Z0-9]{2,}$/.test(compact)) return true;
-  // lowercase words ending in an uppercase code (half.love H6791SG)
-  if (/^[a-z].*[A-Z0-9]{4,}$/.test(compact)) return true;
   // dotted lowercase tokens (community.customs, half.love)
   if (/^[a-z]+\.[a-z]/.test(compact)) return true;
   return false;
