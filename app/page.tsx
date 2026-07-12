@@ -46,6 +46,7 @@ type Snapshot = {
   generatedAt: string | null;
   fleet: Record<string, number>;
   items: SnapshotItem[];
+  reserves?: { smartlead: number; saleshandy: number };
 };
 
 const STATUS_META: Record<string, { dot: string; label: string; text: string }> = {
@@ -717,6 +718,29 @@ export default function Dashboard() {
 
         {/* Right rail — widget on top, notifications under it (Windows 11 style) */}
         <aside className="w-full shrink-0 space-y-6 lg:w-80">
+          {/* Ready reserve — idle + healthy mailboxes available to deploy */}
+          {snapshot?.reserves && (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-800">
+                🟢 Ready reserve
+                <span className="ml-1 font-normal text-slate-400">idle &amp; healthy</span>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                <div className="p-4 text-center">
+                  <div className="text-3xl font-bold tabular-nums text-emerald-600">{snapshot.reserves.smartlead}</div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">Smartlead</div>
+                </div>
+                <div className="p-4 text-center">
+                  <div className="text-3xl font-bold tabular-nums text-emerald-600">{snapshot.reserves.saleshandy}</div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">Saleshandy</div>
+                </div>
+              </div>
+              <p className="border-t border-slate-100 px-4 py-2 text-[11px] leading-snug text-slate-400">
+                Green mailboxes connected to the sequencer but not yet in a campaign — capacity you can deploy.
+              </p>
+            </div>
+          )}
+
           {/* Morning snapshot widget */}
           {snapshot && snapshot.items.length > 0 && (
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

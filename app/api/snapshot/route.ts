@@ -78,9 +78,22 @@ export async function GET() {
     .prepare("SELECT health_status, COUNT(*) AS n FROM senders GROUP BY health_status")
     .all() as { health_status: string; n: number }[];
 
+  // Ready reserve: healthy mailboxes connected to a sequencer but not yet
+  // assigned to any campaign — capacity available to deploy.
+  const idleClause = "(campaigns IS NULL OR campaigns = '[]' OR campaigns = 'null')";
+  const reserves = {
+    smartlead: scalar(
+      `SELECT COUNT(*) n FROM senders WHERE smartlead_id IS NOT NULL AND health_status = 'green' AND ${idleClause}`,
+    ),
+    saleshandy: scalar(
+      `SELECT COUNT(*) n FROM senders WHERE saleshandy_id IS NOT NULL AND health_status = 'green' AND ${idleClause}`,
+    ),
+  };
+
   return NextResponse.json({
     generatedAt: lastSync,
     fleet: Object.fromEntries(counts.map((c) => [c.health_status, c.n])),
     items,
+    reserves,
   });
 }
