@@ -12,6 +12,7 @@ const COLS = [
   "bucket", "detected_stack", "pillar", "proof_point",
   "subject", "email_1", "followup_day_3", "followup_day_8", "breakup_day_15",
   "confidence", "status", "rep_notes",
+  "size", "researched_at", "fit_reason", "research_trail",
 ] as const;
 
 type Row = Partial<Record<(typeof COLS)[number], string>>;

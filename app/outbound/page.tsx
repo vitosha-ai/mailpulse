@@ -27,6 +27,10 @@ type Row = {
   confidence: string | null;
   status: string;
   rep_notes: string | null;
+  size: string | null;
+  researched_at: string | null;
+  fit_reason: string | null;
+  research_trail: string | null;
 };
 
 const STATUSES = ["Pending", "Verified", "Edited", "Sent", "Rejected", "Skipped"] as const;
@@ -269,6 +273,31 @@ export default function Outbound() {
                           <span className="font-mono text-slate-600">{r.verified_email}</span>
                         )}
                       </div>
+                    </div>
+
+                    {/* Research provenance — why this row exists */}
+                    <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-700/70">
+                          Research
+                        </p>
+                        <div className="flex items-center gap-3 font-mono text-[11px] text-slate-500">
+                          {r.size && <span>{r.size} employees</span>}
+                          {r.researched_at && <span>· {r.researched_at.replace("T", " ")}</span>}
+                        </div>
+                      </div>
+                      {r.fit_reason && (
+                        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+                          <span className="font-semibold text-slate-900">Why this fits: </span>
+                          {r.fit_reason}
+                        </p>
+                      )}
+                      {r.research_trail && (
+                        <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                          <span className="font-semibold text-slate-600">How we got here: </span>
+                          {r.research_trail}
+                        </p>
+                      )}
                     </div>
 
                     {proof && (

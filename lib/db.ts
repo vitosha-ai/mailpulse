@@ -191,6 +191,10 @@ function migrate(db: Database.Database) {
       confidence TEXT,                      -- High | Medium | Low
       status TEXT NOT NULL DEFAULT 'Pending', -- Pending|Verified|Edited|Sent|Rejected|Skipped
       rep_notes TEXT,
+      size TEXT,                            -- company headcount
+      researched_at TEXT,                   -- when the agent produced the row
+      fit_reason TEXT,                      -- technology / pillar / ICP justification
+      research_trail TEXT,                  -- step-by-step provenance
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(queued_date, verified_email, trigger_detail)
     );
@@ -218,6 +222,10 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN sh_zero_checked TEXT", // date of last zero-day increment
     "ALTER TABLE inbox_messages ADD COLUMN source TEXT NOT NULL DEFAULT 'maildoso'",
     "ALTER TABLE inbox_messages ADD COLUMN ext_id TEXT",
+    "ALTER TABLE research_queue ADD COLUMN size TEXT",
+    "ALTER TABLE research_queue ADD COLUMN researched_at TEXT",
+    "ALTER TABLE research_queue ADD COLUMN fit_reason TEXT",
+    "ALTER TABLE research_queue ADD COLUMN research_trail TEXT",
   ];
   for (const stmt of addColumns) {
     try {
