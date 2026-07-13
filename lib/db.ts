@@ -176,6 +176,26 @@ function migrate(db: Database.Database) {
       ok INTEGER,
       detail TEXT
     );
+
+    -- Outbound research queue, written nightly by the Vitosha research agent
+    -- (a separate Python process sharing this database file). One row = one
+    -- contact at one triggered account, with a pre-drafted 4-email sequence.
+    -- The agent researches + drafts only; every send is a human action here.
+    CREATE TABLE IF NOT EXISTS research_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      queued_date TEXT NOT NULL,            -- ISO date the agent produced the row
+      first_name TEXT, last_name TEXT, title TEXT, verified_email TEXT, linkedin TEXT,
+      company TEXT, trigger_type TEXT, trigger_detail TEXT, trigger_date TEXT, source_url TEXT,
+      bucket TEXT, detected_stack TEXT, pillar TEXT, proof_point TEXT,
+      subject TEXT, email_1 TEXT, followup_day_3 TEXT, followup_day_8 TEXT, breakup_day_15 TEXT,
+      confidence TEXT,                      -- High | Medium | Low
+      status TEXT NOT NULL DEFAULT 'Pending', -- Pending|Verified|Edited|Sent|Rejected|Skipped
+      rep_notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(queued_date, verified_email, trigger_detail)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rq_date ON research_queue(queued_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_rq_status ON research_queue(status);
   `);
 
   // Additive migrations for databases created before these columns existed.

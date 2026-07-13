@@ -16,10 +16,12 @@ async function sha256(text: string): Promise<string> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public paths: login screen, its API, and framework assets.
+  // Public paths: login screen, its API, framework assets, and the outbound
+  // ingest endpoint (machine-to-machine; protected by its own bearer token).
   if (
     pathname === "/login" ||
     pathname === "/api/login" ||
+    pathname === "/api/outbound/ingest" ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {
