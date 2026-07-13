@@ -228,9 +228,9 @@ export default function Outbound() {
                       </span>
                       <span className="truncate text-sm text-slate-500">{r.title}</span>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                      <span className="font-medium text-slate-600">{r.company}</span>
-                      <span>·</span>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                      <span className="font-semibold text-slate-700">{r.company}</span>
+                      <span className="text-slate-300">·</span>
                       <span className="truncate">{r.trigger_type}</span>
                       {proof && (
                         <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-700">
@@ -248,7 +248,7 @@ export default function Outbound() {
                   <div className="border-t border-slate-100 px-5 py-4">
                     {/* GATE 1 — the trigger + source */}
                     <div className="mb-4 rounded-xl bg-slate-50 p-4">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                         Gate 1 · verify the trigger
                       </p>
                       <p className="mt-1.5 text-sm text-slate-700">{r.trigger_detail}</p>
@@ -276,25 +276,25 @@ export default function Outbound() {
                     </div>
 
                     {/* Research provenance — why this row exists */}
-                    <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                    <div className="mb-4 rounded-xl border border-brand/15 bg-brand/5 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-700/70">
+                        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-brand">
                           Research
                         </p>
-                        <div className="flex items-center gap-3 font-mono text-[11px] text-slate-500">
+                        <div className="flex items-center gap-3 font-mono text-[11px] text-slate-600">
                           {r.size && <span>{r.size} employees</span>}
                           {r.researched_at && <span>· {r.researched_at.replace("T", " ")}</span>}
                         </div>
                       </div>
                       {r.fit_reason && (
-                        <p className="mt-2 text-sm leading-relaxed text-slate-700">
+                        <p className="mt-2 text-sm leading-relaxed text-slate-800">
                           <span className="font-semibold text-slate-900">Why this fits: </span>
                           {r.fit_reason}
                         </p>
                       )}
                       {r.research_trail && (
-                        <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                          <span className="font-semibold text-slate-600">How we got here: </span>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                          <span className="font-semibold text-slate-700">How we got here: </span>
                           {r.research_trail}
                         </p>
                       )}
@@ -309,7 +309,7 @@ export default function Outbound() {
                     )}
 
                     {/* GATE 2 — the drafts, editable */}
-                    <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-slate-400">
+                    <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                       Gate 2 · read &amp; edit the sequence
                     </p>
                     <div className="space-y-3">
