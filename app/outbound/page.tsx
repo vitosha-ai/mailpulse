@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Row = {
   id: number;
@@ -51,11 +51,10 @@ const STATUS_META: Record<string, string> = {
 };
 
 const DRAFT_FIELDS = [
-  { key: "subject", label: "Subject" },
-  { key: "email_1", label: "Email 1" },
-  { key: "followup_day_3", label: "Follow-up · Day 3" },
-  { key: "followup_day_8", label: "Follow-up · Day 8" },
-  { key: "breakup_day_15", label: "Breakup · Day 15" },
+  { key: "email_1", label: "Email 1", day: "Day 0" },
+  { key: "followup_day_3", label: "Follow-up", day: "Day 3" },
+  { key: "followup_day_8", label: "Follow-up", day: "Day 8" },
+  { key: "breakup_day_15", label: "Breakup", day: "Day 15" },
 ] as const;
 
 type CostAgg = {
@@ -108,7 +107,18 @@ function CostCard({ label, agg }: { label: string; agg: CostAgg }) {
 }
 
 function hasProofToken(r: Partial<Row>): boolean {
-  return DRAFT_FIELDS.some((f) => (r[f.key] as string | null | undefined)?.includes("[PROOF:"));
+  return (
+    DRAFT_FIELDS.some((f) => (r[f.key] as string | null | undefined)?.includes("[PROOF:")) ||
+    (r.subject ?? "").includes("[PROOF:")
+  );
+}
+
+// Rows estimate so textareas read like text, not cramped form boxes.
+function rowsFor(text: string | null | undefined, min = 2): number {
+  const t = text ?? "";
+  const byLength = Math.ceil(t.length / 78);
+  const byLines = t.split("\n").length;
+  return Math.min(12, Math.max(min, byLength, byLines));
 }
 
 export default function Outbound() {
@@ -117,12 +127,15 @@ export default function Outbound() {
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, Partial<Row>>>({});
   const [saving, setSaving] = useState<number | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const [costs, setCosts] = useState<Costs | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showSpend, setShowSpend] = useState(false);
+  const [showTrail, setShowTrail] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (d?: string | null, status?: string) => {
     const params = new URLSearchParams();
@@ -134,6 +147,10 @@ export default function Outbound() {
     setDates(data.dates);
     setRows(data.rows);
     setCounts(data.counts);
+    // Keep the current selection if it survived the filter; else pick the first.
+    setSelectedId((prev) =>
+      prev && (data.rows as Row[]).some((r) => r.id === prev) ? prev : (data.rows[0]?.id ?? null),
+    );
   }, []);
 
   useEffect(() => {
@@ -153,10 +170,47 @@ export default function Outbound() {
   const setField = (id: number, key: keyof Row, value: string) =>
     setEdits((e) => ({ ...e, [id]: { ...e[id], [key]: value } }));
 
+  const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
+
+  const selectRow = useCallback(
+    (id: number) => {
+      setSelectedId(id);
+      setShowTrail(false);
+      detailRef.current?.scrollTo({ top: 0 });
+      // On stacked (mobile) layout, bring the detail pane into view.
+      if (window.innerWidth < 1024) {
+        setTimeout(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      }
+    },
+    [],
+  );
+
+  // Keyboard review: ↑/↓ or j/k moves through the list (ignored while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      const dir = e.key === "ArrowDown" || e.key === "j" ? 1 : e.key === "ArrowUp" || e.key === "k" ? -1 : 0;
+      if (!dir || rows.length === 0) return;
+      e.preventDefault();
+      const idx = rows.findIndex((r) => r.id === selectedId);
+      const next = rows[Math.min(rows.length - 1, Math.max(0, (idx === -1 ? 0 : idx) + dir))];
+      if (next) {
+        selectRow(next.id);
+        listRef.current
+          ?.querySelector(`[data-row-id="${next.id}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [rows, selectedId, selectRow]);
+
   const save = async (r: Row, status?: string) => {
     setSaving(r.id);
     const fields: Record<string, string> = {};
     for (const f of DRAFT_FIELDS) fields[f.key] = (merged(r)[f.key] as string) ?? "";
+    fields.subject = (merged(r).subject as string) ?? "";
     fields.rep_notes = (merged(r).rep_notes as string) ?? "";
     if (status) fields.status = status;
     const res = await fetch("/api/outbound", {
@@ -196,11 +250,15 @@ export default function Outbound() {
   };
 
   const total = useMemo(() => Object.values(counts).reduce((a, b) => a + b, 0), [counts]);
+  const sel = selected ? merged(selected) : null;
+  const selProof = sel ? hasProofToken(sel) : false;
+  const selDirty = selected ? !!edits[selected.id] : false;
+  const selConf = CONF_META[sel?.confidence ?? ""] ?? CONF_META.Low;
 
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
-      <div className="mx-auto max-w-4xl p-6">
-        <header className="mb-6 flex items-center justify-between">
+      <div className="mx-auto max-w-7xl p-6">
+        <header className="mb-5 flex items-center justify-between">
           <div>
             <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Outbound
@@ -217,65 +275,79 @@ export default function Outbound() {
           </a>
         </header>
 
-        {/* Agent spend — Apollo credits + Claude $ (metered per run by the agent) */}
+        {/* Agent spend — one compact strip; expand for the full breakdown */}
         {costs && (
-          <div className="mb-6">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                Agent spend
-              </p>
-              <button
-                onClick={() => setShowHistory((v) => !v)}
-                className="text-[11px] font-medium text-brand hover:underline"
-              >
-                {showHistory ? "hide history" : "daily history"}
-              </button>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <CostCard label="Today" agg={costs.today} />
-              <CostCard label="Last 7 days" agg={costs.week} />
-              <CostCard label="Last 30 days" agg={costs.month} />
-            </div>
-            {showHistory && (
-              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-left font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-4 py-2 text-right">Runs</th>
-                      <th className="px-4 py-2 text-right">Apollo credits</th>
-                      <th className="px-4 py-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {costs.daily.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-3 text-center text-slate-400">
-                          No usage recorded yet — appears after the agent&apos;s next run.
-                        </td>
+          <div className="mb-4">
+            <button
+              onClick={() => setShowSpend((v) => !v)}
+              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:border-slate-300"
+            >
+              <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-600">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  Agent spend
+                </span>
+                <span>
+                  Today <b className="text-slate-900">{usd(costs.today.total_cost_usd)}</b>
+                </span>
+                <span>
+                  7d <b className="text-slate-900">{usd(costs.week.total_cost_usd)}</b>
+                </span>
+                <span>
+                  30d <b className="text-slate-900">{usd(costs.month.total_cost_usd)}</b>
+                </span>
+                <span className="hidden sm:inline text-slate-400">
+                  {compact(costs.month.apollo_credits)} Apollo credits · {compact(costs.month.anthropic_tokens)} Claude tok (30d)
+                </span>
+              </span>
+              <span className="text-[11px] font-medium text-brand">{showSpend ? "collapse ▴" : "details ▾"}</span>
+            </button>
+            {showSpend && (
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <CostCard label="Today" agg={costs.today} />
+                  <CostCard label="Last 7 days" agg={costs.week} />
+                  <CostCard label="Last 30 days" agg={costs.month} />
+                </div>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-left font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                        <th className="px-4 py-2">Date</th>
+                        <th className="px-4 py-2 text-right">Runs</th>
+                        <th className="px-4 py-2 text-right">Apollo credits</th>
+                        <th className="px-4 py-2 text-right">Total</th>
                       </tr>
-                    )}
-                    {costs.daily.map((d) => (
-                      <tr key={d.run_date} className="border-b border-slate-50 text-slate-700">
-                        <td className="px-4 py-2 font-mono">{d.run_date}</td>
-                        <td className="px-4 py-2 text-right">{d.runs}</td>
-                        <td className="px-4 py-2 text-right">{d.apollo_credits}</td>
-                        <td className="px-4 py-2 text-right font-medium text-slate-900">{usd(d.total_cost_usd)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="px-4 py-2 text-[11px] text-slate-400">
-                  All-time: {usd(costs.allTime.total_cost_usd)} across {costs.allTime.runs} runs ·
-                  $ figures are estimates from metered credits/tokens at plan rates.
-                </p>
+                    </thead>
+                    <tbody>
+                      {costs.daily.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-3 text-center text-slate-400">
+                            No usage recorded yet — appears after the agent&apos;s next run.
+                          </td>
+                        </tr>
+                      )}
+                      {costs.daily.map((d) => (
+                        <tr key={d.run_date} className="border-b border-slate-50 text-slate-700">
+                          <td className="px-4 py-2 font-mono">{d.run_date}</td>
+                          <td className="px-4 py-2 text-right">{d.runs}</td>
+                          <td className="px-4 py-2 text-right">{d.apollo_credits}</td>
+                          <td className="px-4 py-2 text-right font-medium text-slate-900">{usd(d.total_cost_usd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="px-4 py-2 text-[11px] text-slate-400">
+                    All-time: {usd(costs.allTime.total_cost_usd)} across {costs.allTime.runs} runs ·
+                    $ figures are estimates from metered credits/tokens at plan rates.
+                  </p>
+                </div>
               </div>
             )}
           </div>
         )}
 
         {/* Controls */}
-        <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <select
             value={date ?? ""}
             onChange={(e) => {
@@ -310,152 +382,113 @@ export default function Outbound() {
               ) : null,
             )}
           </div>
+          <span className="ml-auto hidden text-[11px] text-slate-400 lg:inline">↑↓ to move between leads</span>
         </div>
 
-        {rows.length === 0 && (
+        {rows.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
             No rows for this day. The research agent writes here each morning.
           </div>
-        )}
-
-        <div className="space-y-3">
-          {rows.map((r0) => {
-            const r = merged(r0);
-            const open = openId === r.id;
-            const conf = CONF_META[r.confidence ?? ""] ?? CONF_META.Low;
-            const dirty = !!edits[r.id];
-            const proof = hasProofToken(r);
-            return (
-              <div
-                key={r.id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300"
-              >
-                {/* Row header */}
-                <button
-                  onClick={() => setOpenId(open ? null : r.id)}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left"
-                >
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${conf.dot}`} title={r.confidence ?? ""} />
-                  <div className="min-w-0 flex-1">
+        ) : (
+          <div className="flex flex-col gap-4 lg:h-[calc(100vh-13rem)] lg:flex-row">
+            {/* ------- Left: lead list ------- */}
+            <div
+              ref={listRef}
+              className="max-h-[38vh] shrink-0 space-y-1.5 overflow-y-auto pr-1 lg:max-h-none lg:w-[330px]"
+            >
+              {rows.map((r0) => {
+                const r = merged(r0);
+                const conf = CONF_META[r.confidence ?? ""] ?? CONF_META.Low;
+                const active = r.id === selectedId;
+                const noPoc = !r.first_name && !r.verified_email;
+                return (
+                  <button
+                    key={r.id}
+                    data-row-id={r.id}
+                    onClick={() => selectRow(r.id)}
+                    className={`block w-full rounded-xl border px-3.5 py-2.5 text-left transition ${
+                      active
+                        ? "border-brand/60 bg-white shadow-md ring-1 ring-brand/25"
+                        : "border-slate-200 bg-white/70 hover:border-slate-300 hover:bg-white"
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="truncate font-semibold text-slate-900">
-                        {r.first_name} {r.last_name}
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${conf.dot}`} title={r.confidence ?? ""} />
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                        {noPoc ? r.company : `${r.first_name} ${r.last_name ?? ""}`}
                       </span>
-                      <span className="truncate text-sm text-slate-500">{r.title}</span>
+                      {edits[r.id] && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title="unsaved edits" />}
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_META[r.status] ?? ""}`}>
+                        {r.status}
+                      </span>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-700">{r.company}</span>
-                      <span className="text-slate-300">·</span>
-                      <span className="truncate">{r.trigger_type}</span>
-                      {proof && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-700">
-                          PROOF token
-                        </span>
-                      )}
+                    <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-xs text-slate-500">
+                      <span className="truncate">
+                        {noPoc ? <span className="italic text-red-500">no contact — manual</span> : r.title}
+                      </span>
                     </div>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_META[r.status] ?? ""}`}>
-                    {r.status}
-                  </span>
-                </button>
+                    <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-[11px] text-slate-400">
+                      {!noPoc && <span className="truncate font-medium text-slate-600">{r.company}</span>}
+                      <span className="truncate">· {r.trigger_type}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-                {open && (
-                  <div className="border-t border-slate-100 px-5 py-4">
-                    {/* GATE 1 — the trigger + source */}
-                    <div className="mb-4 rounded-xl bg-slate-50 p-4">
-                      <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                        Gate 1 · verify the trigger
+            {/* ------- Right: reading pane ------- */}
+            <div
+              ref={detailRef}
+              className="min-w-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-sm"
+            >
+              {!sel ? (
+                <div className="p-10 text-center text-sm text-slate-400">Select a lead to review.</div>
+              ) : (
+                <div className="p-6">
+                  {/* Lead header */}
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${selConf.dot}`} />
+                        <h2 className="truncate text-lg font-bold text-slate-900">
+                          {sel.first_name ? `${sel.first_name} ${sel.last_name ?? ""}` : sel.company}
+                        </h2>
+                        <span className={`text-xs font-semibold ${selConf.text}`}>{sel.confidence}</span>
+                      </div>
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        {sel.first_name ? (
+                          <>
+                            {sel.title} · <b className="text-slate-800">{sel.company}</b>
+                          </>
+                        ) : (
+                          <span className="text-red-600">No verified contact found — source manually</span>
+                        )}
                       </p>
-                      <p className="mt-1.5 text-sm text-slate-700">{r.trigger_detail}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                        {r.source_url ? (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                        {sel.verified_email && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-700">{sel.verified_email}</span>
+                        )}
+                        {sel.linkedin && (
                           <a
-                            href={r.source_url}
+                            href={sel.linkedin.startsWith("http") ? sel.linkedin : `https://${sel.linkedin}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium text-brand underline decoration-brand/30 underline-offset-2 hover:decoration-brand"
+                            className="font-medium text-brand hover:underline"
                           >
-                            open source ↗
+                            LinkedIn ↗
                           </a>
-                        ) : (
-                          <span className="text-red-600">no source URL — verify manually</span>
                         )}
-                        <span>{r.bucket}</span>
-                        <span>· {r.pillar}</span>
-                        <span>· proof: {r.proof_point}</span>
-                        {r.detected_stack && <span>· {r.detected_stack}</span>}
-                        {r.verified_email && (
-                          <span className="font-mono text-slate-600">{r.verified_email}</span>
-                        )}
+                        <span>{sel.bucket}</span>
+                        <span>· {sel.pillar}</span>
+                        {sel.detected_stack && <span>· {sel.detected_stack}</span>}
+                        {sel.size && <span>· {sel.size} emp</span>}
                       </div>
                     </div>
-
-                    {/* Research provenance — why this row exists */}
-                    <div className="mb-4 rounded-xl border border-brand/15 bg-brand/5 p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-brand">
-                          Research
-                        </p>
-                        <div className="flex items-center gap-3 font-mono text-[11px] text-slate-600">
-                          {r.size && <span>{r.size} employees</span>}
-                          {r.researched_at && <span>· {r.researched_at.replace("T", " ")}</span>}
-                        </div>
-                      </div>
-                      {r.fit_reason && (
-                        <p className="mt-2 text-sm leading-relaxed text-slate-800">
-                          <span className="font-semibold text-slate-900">Why this fits: </span>
-                          {r.fit_reason}
-                        </p>
-                      )}
-                      {r.research_trail && (
-                        <p className="mt-2 text-xs leading-relaxed text-slate-600">
-                          <span className="font-semibold text-slate-700">How we got here: </span>
-                          {r.research_trail}
-                        </p>
-                      )}
-                    </div>
-
-                    {proof && (
-                      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                        ⚠ This draft still contains a <span className="font-mono">[PROOF: …]</span> token.
-                        Replace it with an approved reference (or delete the sentence) before sending —
-                        never send an email containing a token.
-                      </div>
-                    )}
-
-                    {/* GATE 2 — the drafts, editable */}
-                    <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                      Gate 2 · read &amp; edit the sequence
-                    </p>
-                    <div className="space-y-3">
-                      {DRAFT_FIELDS.map((f) => (
-                        <div key={f.key}>
-                          <label className="text-xs font-medium text-slate-500">{f.label}</label>
-                          <textarea
-                            value={(r[f.key] as string) ?? ""}
-                            onChange={(e) => setField(r.id, f.key, e.target.value)}
-                            rows={f.key === "subject" ? 1 : 3}
-                            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
-                          />
-                        </div>
-                      ))}
-                      <div>
-                        <label className="text-xs font-medium text-slate-500">Rep notes</label>
-                        <textarea
-                          value={(r.rep_notes as string) ?? ""}
-                          onChange={(e) => setField(r.id, "rep_notes", e.target.value)}
-                          rows={2}
-                          className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <select
-                        value={r.status}
-                        onChange={(e) => setField(r.id, "status", e.target.value)}
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand"
+                        value={sel.status}
+                        onChange={(e) => setField(sel.id, "status", e.target.value)}
+                        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-brand"
                       >
                         {STATUSES.map((s) => (
                           <option key={s} value={s}>
@@ -464,37 +497,131 @@ export default function Outbound() {
                         ))}
                       </select>
                       <button
-                        onClick={() => save(r0, (r.status as string) || undefined)}
-                        disabled={saving === r.id}
-                        className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
+                        onClick={() => selected && save(selected, (sel.status as string) || undefined)}
+                        disabled={saving === sel.id}
+                        className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
                       >
-                        {saving === r.id ? "Saving…" : dirty ? "Save changes" : "Save"}
+                        {saving === sel.id ? "Saving…" : selDirty ? "Save changes" : "Save"}
                       </button>
                       <button
-                        onClick={() => copySequence(r0)}
-                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+                        onClick={() => selected && copySequence(selected)}
+                        className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
                       >
-                        {copied === r.id ? "Copied ✓" : "Copy for Smartlead"}
+                        {copied === sel.id ? "Copied ✓" : "Copy for Smartlead"}
                       </button>
                       <button
-                        onClick={() => save(r0, "Sent")}
-                        className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+                        onClick={() => selected && save(selected, "Sent")}
+                        className="rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-medium text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                       >
                         Mark sent
                       </button>
                       <button
-                        onClick={() => save(r0, "Rejected")}
-                        className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-100"
+                        onClick={() => selected && save(selected, "Rejected")}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-medium text-red-600 shadow-sm transition hover:bg-red-100"
                       >
                         Reject
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {/* Trigger — the "why now" */}
+                  <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                        {sel.trigger_type} · {sel.trigger_date}
+                      </p>
+                      {sel.source_url ? (
+                        <a
+                          href={sel.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-brand underline decoration-brand/30 underline-offset-2 hover:decoration-brand"
+                        >
+                          verify source ↗
+                        </a>
+                      ) : (
+                        <span className="text-xs font-medium text-red-600">no source URL — verify manually</span>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-[15px] leading-relaxed text-slate-800">{sel.trigger_detail}</p>
+                    {sel.fit_reason && (
+                      <p className="mt-2 border-t border-slate-200/70 pt-2 text-[13px] leading-relaxed text-slate-600">
+                        {sel.fit_reason}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setShowTrail((v) => !v)}
+                      className="mt-2 text-[11px] font-medium text-brand hover:underline"
+                    >
+                      {showTrail ? "hide research trail ▴" : "research trail ▾"}
+                    </button>
+                    {showTrail && sel.research_trail && (
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{sel.research_trail}</p>
+                    )}
+                  </div>
+
+                  {selProof && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      ⚠ This draft still contains a <span className="font-mono">[PROOF: …]</span> token. Replace it with an
+                      approved reference (or delete the sentence) before sending.
+                    </div>
+                  )}
+
+                  {/* The sequence, styled as readable emails (click any text to edit) */}
+                  {sel.email_1 ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-baseline gap-2">
+                        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Sequence</p>
+                        <p className="text-[11px] text-slate-400">click any text to edit · Save when done</p>
+                      </div>
+
+                      {/* Subject */}
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-slate-400">Subject</span>
+                        <input
+                          value={sel.subject ?? ""}
+                          onChange={(e) => setField(sel.id, "subject", e.target.value)}
+                          className="w-full border-none bg-transparent text-sm font-medium text-slate-900 outline-none"
+                        />
+                      </div>
+
+                      {DRAFT_FIELDS.map((f) => (
+                        <div key={f.key} className="overflow-hidden rounded-xl border border-slate-200">
+                          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3.5 py-1.5">
+                            <span className="text-xs font-semibold text-slate-700">{f.label}</span>
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">{f.day}</span>
+                          </div>
+                          <textarea
+                            value={(sel[f.key] as string) ?? ""}
+                            onChange={(e) => setField(sel.id, f.key, e.target.value)}
+                            rows={rowsFor(sel[f.key] as string)}
+                            className="block w-full resize-none border-none bg-white px-3.5 py-2.5 text-[13.5px] leading-relaxed text-slate-800 outline-none transition focus:bg-blue-50/30"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-5 text-center text-sm text-slate-500">
+                      No drafts yet for this lead{sel.first_name ? "" : " (no contact to write to)"} — it was queued
+                      beyond the run&apos;s draft budget or has no verified contact.
+                    </div>
+                  )}
+
+                  {/* Rep notes */}
+                  <div className="mt-4">
+                    <label className="text-xs font-medium text-slate-500">Rep notes</label>
+                    <textarea
+                      value={(sel.rep_notes as string) ?? ""}
+                      onChange={(e) => setField(sel.id, "rep_notes", e.target.value)}
+                      rows={rowsFor(sel.rep_notes, 2)}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
