@@ -127,6 +127,11 @@ export default function Outbound() {
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [q, setQ] = useState("");
+  const [trigFilter, setTrigFilter] = useState("");
+  const [confFilter, setConfFilter] = useState("");
+  const [noPocOnly, setNoPocOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<"confidence" | "company" | "recent">("confidence");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, Partial<Row>>>({});
   const [saving, setSaving] = useState<number | null>(null);
@@ -136,27 +141,26 @@ export default function Outbound() {
   const [showTrail, setShowTrail] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async (d?: string | null, status?: string) => {
+  const load = useCallback(async (d?: string | null) => {
     const params = new URLSearchParams();
     if (d) params.set("date", d);
-    if (status) params.set("status", status);
     const res = await fetch(`/api/outbound?${params}`);
     const data = await res.json();
     setDate(data.date);
     setDates(data.dates);
     setRows(data.rows);
     setCounts(data.counts);
-    // Keep the current selection if it survived the filter; else pick the first.
     setSelectedId((prev) =>
       prev && (data.rows as Row[]).some((r) => r.id === prev) ? prev : (data.rows[0]?.id ?? null),
     );
   }, []);
 
   useEffect(() => {
-    load(date, statusFilter);
+    load(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
     fetch("/api/outbound/costs")
@@ -172,6 +176,48 @@ export default function Outbound() {
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
 
+  // Trigger types present in today's batch (drives the filter dropdown).
+  const trigTypes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.trigger_type).filter(Boolean))) as string[],
+    [rows],
+  );
+
+  const CONF_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+
+  // The list the rep actually sees: search + filters + sort, all instant.
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const out = rows.filter((r) => {
+      if (statusFilter && r.status !== statusFilter) return false;
+      if (trigFilter && r.trigger_type !== trigFilter) return false;
+      if (confFilter && (r.confidence ?? "Low") !== confFilter) return false;
+      if (noPocOnly && (r.first_name || r.verified_email)) return false;
+      if (needle) {
+        const hay = `${r.company} ${r.first_name} ${r.last_name} ${r.title} ${r.verified_email}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    out.sort((a, b) => {
+      if (sortBy === "company") return (a.company ?? "").localeCompare(b.company ?? "");
+      if (sortBy === "recent") return (b.trigger_date ?? "").localeCompare(a.trigger_date ?? "");
+      return (
+        (CONF_ORDER[a.confidence ?? "Low"] ?? 3) - (CONF_ORDER[b.confidence ?? "Low"] ?? 3) ||
+        (a.company ?? "").localeCompare(b.company ?? "")
+      );
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, q, statusFilter, trigFilter, confFilter, noPocOnly, sortBy]);
+
+  // Keep the selection inside the visible set as filters change.
+  useEffect(() => {
+    if (visible.length && !visible.some((r) => r.id === selectedId)) {
+      setSelectedId(visible[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const selectRow = useCallback(
     (id: number) => {
       setSelectedId(id);
@@ -185,16 +231,21 @@ export default function Outbound() {
     [],
   );
 
-  // Keyboard review: ↑/↓ or j/k moves through the list (ignored while typing).
+  // Keyboard review: ↑/↓ or j/k moves through the visible list; "/" jumps to search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      if (e.key === "/") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
       const dir = e.key === "ArrowDown" || e.key === "j" ? 1 : e.key === "ArrowUp" || e.key === "k" ? -1 : 0;
-      if (!dir || rows.length === 0) return;
+      if (!dir || visible.length === 0) return;
       e.preventDefault();
-      const idx = rows.findIndex((r) => r.id === selectedId);
-      const next = rows[Math.min(rows.length - 1, Math.max(0, (idx === -1 ? 0 : idx) + dir))];
+      const idx = visible.findIndex((r) => r.id === selectedId);
+      const next = visible[Math.min(visible.length - 1, Math.max(0, (idx === -1 ? 0 : idx) + dir))];
       if (next) {
         selectRow(next.id);
         listRef.current
@@ -204,7 +255,7 @@ export default function Outbound() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selectedId, selectRow]);
+  }, [visible, selectedId, selectRow]);
 
   const save = async (r: Row, status?: string) => {
     setSaving(r.id);
@@ -352,7 +403,7 @@ export default function Outbound() {
             value={date ?? ""}
             onChange={(e) => {
               setDate(e.target.value);
-              load(e.target.value, statusFilter);
+              load(e.target.value);
             }}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm outline-none focus:border-brand"
           >
@@ -391,12 +442,83 @@ export default function Outbound() {
           </div>
         ) : (
           <div className="flex flex-col gap-4 lg:h-[calc(100vh-13rem)] lg:flex-row">
-            {/* ------- Left: lead list ------- */}
-            <div
-              ref={listRef}
-              className="max-h-[38vh] shrink-0 space-y-1.5 overflow-y-auto pr-1 lg:max-h-none lg:w-[330px]"
-            >
-              {rows.map((r0) => {
+            {/* ------- Left: search + filters + lead list ------- */}
+            <div className="flex shrink-0 flex-col lg:w-[330px]">
+              <div className="mb-2 space-y-1.5">
+                <input
+                  ref={searchRef}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search company, name, title…  ( / )"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
+                />
+                <div className="flex gap-1.5">
+                  <select
+                    value={trigFilter}
+                    onChange={(e) => setTrigFilter(e.target.value)}
+                    className={`min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-[11px] shadow-sm outline-none focus:border-brand ${trigFilter ? "border-brand/50 text-brand font-medium" : "border-slate-200 text-slate-600"}`}
+                  >
+                    <option value="">All triggers</option>
+                    {trigTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={confFilter}
+                    onChange={(e) => setConfFilter(e.target.value)}
+                    className={`min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-[11px] shadow-sm outline-none focus:border-brand ${confFilter ? "border-brand/50 text-brand font-medium" : "border-slate-200 text-slate-600"}`}
+                  >
+                    <option value="">Any conf.</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600 shadow-sm outline-none focus:border-brand"
+                  >
+                    <option value="confidence">Conf. first</option>
+                    <option value="company">Company A–Z</option>
+                    <option value="recent">Newest trigger</option>
+                  </select>
+                  <button
+                    onClick={() => setNoPocOnly((v) => !v)}
+                    title="Only leads with no contact (manual sourcing)"
+                    className={`shrink-0 rounded-lg border px-2 py-1.5 text-[11px] font-medium shadow-sm transition ${
+                      noPocOnly ? "border-red-300 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                    }`}
+                  >
+                    no&nbsp;POC
+                  </button>
+                </div>
+                <p className="px-0.5 text-[11px] text-slate-400">
+                  {visible.length} of {rows.length} lead{rows.length === 1 ? "" : "s"}
+                  {(q || trigFilter || confFilter || noPocOnly || statusFilter) && (
+                    <button
+                      onClick={() => {
+                        setQ("");
+                        setTrigFilter("");
+                        setConfFilter("");
+                        setNoPocOnly(false);
+                        setStatusFilter("");
+                      }}
+                      className="ml-2 font-medium text-brand hover:underline"
+                    >
+                      clear filters
+                    </button>
+                  )}
+                </p>
+              </div>
+              <div ref={listRef} className="max-h-[34vh] flex-1 space-y-1.5 overflow-y-auto pr-1 lg:max-h-none">
+              {visible.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-center text-xs text-slate-400">
+                  No leads match these filters.
+                </div>
+              )}
+              {visible.map((r0) => {
                 const r = merged(r0);
                 const conf = CONF_META[r.confidence ?? ""] ?? CONF_META.Low;
                 const active = r.id === selectedId;
@@ -434,6 +556,7 @@ export default function Outbound() {
                   </button>
                 );
               })}
+              </div>
             </div>
 
             {/* ------- Right: reading pane ------- */}
