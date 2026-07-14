@@ -129,7 +129,7 @@ export default function Outbound() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [q, setQ] = useState("");
   const [trigFilter, setTrigFilter] = useState("");
-  const [confFilter, setConfFilter] = useState("");
+  const [confFilters, setConfFilters] = useState<string[]>([]);
   const [noPocOnly, setNoPocOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"confidence" | "company" | "recent">("confidence");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -190,7 +190,7 @@ export default function Outbound() {
     const out = rows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
       if (trigFilter && r.trigger_type !== trigFilter) return false;
-      if (confFilter && (r.confidence ?? "Low") !== confFilter) return false;
+      if (confFilters.length && !confFilters.includes(r.confidence ?? "Low")) return false;
       if (noPocOnly && (r.first_name || r.verified_email)) return false;
       if (needle) {
         const hay = `${r.company} ${r.first_name} ${r.last_name} ${r.title} ${r.verified_email}`.toLowerCase();
@@ -208,7 +208,7 @@ export default function Outbound() {
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, statusFilter, trigFilter, confFilter, noPocOnly, sortBy]);
+  }, [rows, q, statusFilter, trigFilter, confFilters, noPocOnly, sortBy]);
 
   // Keep the selection inside the visible set as filters change.
   useEffect(() => {
@@ -466,16 +466,6 @@ export default function Outbound() {
                     ))}
                   </select>
                   <select
-                    value={confFilter}
-                    onChange={(e) => setConfFilter(e.target.value)}
-                    className={`min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-[11px] shadow-sm outline-none focus:border-brand ${confFilter ? "border-brand/50 text-brand font-medium" : "border-slate-200 text-slate-600"}`}
-                  >
-                    <option value="">Any conf.</option>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                  <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                     className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600 shadow-sm outline-none focus:border-brand"
@@ -494,14 +484,38 @@ export default function Outbound() {
                     no&nbsp;POC
                   </button>
                 </div>
+                {/* Confidence — multi-select chips (e.g. High + Medium together) */}
+                <div className="flex gap-1.5">
+                  {(["High", "Medium", "Low"] as const).map((c) => {
+                    const on = confFilters.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() =>
+                          setConfFilters((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))
+                        }
+                        title={on ? `Hide ${c} confidence` : `Include ${c} confidence`}
+                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-medium shadow-sm transition ${
+                          on
+                            ? "border-brand/50 bg-brand/5 text-brand"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${CONF_META[c].dot}`} />
+                        {c}
+                        {on && <span className="text-[9px]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
                 <p className="px-0.5 text-[11px] text-slate-400">
                   {visible.length} of {rows.length} lead{rows.length === 1 ? "" : "s"}
-                  {(q || trigFilter || confFilter || noPocOnly || statusFilter) && (
+                  {(q || trigFilter || confFilters.length > 0 || noPocOnly || statusFilter) && (
                     <button
                       onClick={() => {
                         setQ("");
                         setTrigFilter("");
-                        setConfFilter("");
+                        setConfFilters([]);
                         setNoPocOnly(false);
                         setStatusFilter("");
                       }}
