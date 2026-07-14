@@ -58,6 +58,55 @@ const DRAFT_FIELDS = [
   { key: "breakup_day_15", label: "Breakup · Day 15" },
 ] as const;
 
+type CostAgg = {
+  runs: number;
+  apollo_credits: number;
+  apollo_cost_usd: number;
+  anthropic_tokens: number;
+  anthropic_cost_usd: number;
+  apify_runs: number;
+  apify_cost_usd: number;
+  total_cost_usd: number;
+};
+
+type Costs = {
+  today: CostAgg;
+  week: CostAgg;
+  month: CostAgg;
+  allTime: CostAgg;
+  daily: { run_date: string; apollo_credits: number; total_cost_usd: number; runs: number }[];
+};
+
+const usd = (n: number) => `$${(n ?? 0).toFixed(2)}`;
+const compact = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : `${n ?? 0}`;
+
+function CostCard({ label, agg }: { label: string; agg: CostAgg }) {
+  return (
+    <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-baseline justify-between">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</p>
+        <p className="text-lg font-bold text-slate-900">{usd(agg.total_cost_usd)}</p>
+      </div>
+      <div className="mt-2 space-y-1 text-xs text-slate-600">
+        <div className="flex justify-between">
+          <span>Apollo · {compact(agg.apollo_credits)} credits</span>
+          <span className="font-medium text-slate-800">{usd(agg.apollo_cost_usd)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Claude · {compact(agg.anthropic_tokens)} tok</span>
+          <span className="font-medium text-slate-800">{usd(agg.anthropic_cost_usd)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Apify · {agg.apify_runs} runs</span>
+          <span className="font-medium text-slate-800">{usd(agg.apify_cost_usd)}</span>
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">{agg.runs} agent run{agg.runs === 1 ? "" : "s"}</p>
+    </div>
+  );
+}
+
 function hasProofToken(r: Partial<Row>): boolean {
   return DRAFT_FIELDS.some((f) => (r[f.key] as string | null | undefined)?.includes("[PROOF:"));
 }
@@ -72,6 +121,8 @@ export default function Outbound() {
   const [edits, setEdits] = useState<Record<number, Partial<Row>>>({});
   const [saving, setSaving] = useState<number | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
+  const [costs, setCosts] = useState<Costs | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async (d?: string | null, status?: string) => {
     const params = new URLSearchParams();
@@ -89,6 +140,13 @@ export default function Outbound() {
     load(date, statusFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  useEffect(() => {
+    fetch("/api/outbound/costs")
+      .then((r) => r.json())
+      .then(setCosts)
+      .catch(() => setCosts(null));
+  }, []);
 
   const merged = useCallback((r: Row): Row => ({ ...r, ...edits[r.id] }), [edits]);
 
@@ -158,6 +216,63 @@ export default function Outbound() {
             ← Dashboard
           </a>
         </header>
+
+        {/* Agent spend — Apollo credits + Claude $ (metered per run by the agent) */}
+        {costs && (
+          <div className="mb-6">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                Agent spend
+              </p>
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className="text-[11px] font-medium text-brand hover:underline"
+              >
+                {showHistory ? "hide history" : "daily history"}
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <CostCard label="Today" agg={costs.today} />
+              <CostCard label="Last 7 days" agg={costs.week} />
+              <CostCard label="Last 30 days" agg={costs.month} />
+            </div>
+            {showHistory && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                      <th className="px-4 py-2">Date</th>
+                      <th className="px-4 py-2 text-right">Runs</th>
+                      <th className="px-4 py-2 text-right">Apollo credits</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costs.daily.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-3 text-center text-slate-400">
+                          No usage recorded yet — appears after the agent&apos;s next run.
+                        </td>
+                      </tr>
+                    )}
+                    {costs.daily.map((d) => (
+                      <tr key={d.run_date} className="border-b border-slate-50 text-slate-700">
+                        <td className="px-4 py-2 font-mono">{d.run_date}</td>
+                        <td className="px-4 py-2 text-right">{d.runs}</td>
+                        <td className="px-4 py-2 text-right">{d.apollo_credits}</td>
+                        <td className="px-4 py-2 text-right font-medium text-slate-900">{usd(d.total_cost_usd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="px-4 py-2 text-[11px] text-slate-400">
+                  All-time: {usd(costs.allTime.total_cost_usd)} across {costs.allTime.runs} runs ·
+                  $ figures are estimates from metered credits/tokens at plan rates.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Controls */}
         <div className="mb-5 flex flex-wrap items-center gap-3">

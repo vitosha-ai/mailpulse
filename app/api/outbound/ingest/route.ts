@@ -17,6 +17,14 @@ const COLS = [
 
 type Row = Partial<Record<(typeof COLS)[number], string>>;
 
+const USAGE_COLS = [
+  "apollo_enrichments", "apollo_reveals", "apollo_credits", "apollo_cost_usd",
+  "anthropic_calls", "anthropic_input_tokens", "anthropic_output_tokens",
+  "anthropic_cost_usd", "apify_runs", "apify_cost_usd", "total_cost_usd",
+] as const;
+
+type UsageRecord = Partial<Record<(typeof USAGE_COLS)[number], number>>;
+
 export async function POST(request: NextRequest) {
   const token = process.env.OUTBOUND_INGEST_TOKEN;
   if (!token) {
@@ -26,7 +34,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as { queued_date?: string; rows?: Row[] };
+  const body = (await request.json()) as {
+    queued_date?: string;
+    rows?: Row[];
+    usage?: UsageRecord | null;
+  };
   const queuedDate = body.queued_date || new Date().toISOString().slice(0, 10);
   const rows = Array.isArray(body.rows) ? body.rows : [];
 
@@ -48,5 +60,17 @@ export async function POST(request: NextRequest) {
   });
   insertMany(rows);
 
-  return NextResponse.json({ ok: true, received: rows.length, inserted });
+  // Optional per-run usage/cost record (appended, one row per agent run).
+  let usageRecorded = false;
+  if (body.usage && typeof body.usage === "object") {
+    const rec: Record<string, number | string> = { run_date: queuedDate };
+    for (const c of USAGE_COLS) rec[c] = Number(body.usage[c] ?? 0) || 0;
+    db.prepare(
+      `INSERT INTO agent_usage (run_date, ${USAGE_COLS.join(", ")})
+       VALUES (@run_date, ${USAGE_COLS.map((c) => "@" + c).join(", ")})`,
+    ).run(rec);
+    usageRecorded = true;
+  }
+
+  return NextResponse.json({ ok: true, received: rows.length, inserted, usageRecorded });
 }

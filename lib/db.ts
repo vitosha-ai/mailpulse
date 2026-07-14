@@ -200,6 +200,27 @@ function migrate(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_rq_date ON research_queue(queued_date DESC);
     CREATE INDEX IF NOT EXISTS idx_rq_status ON research_queue(status);
+
+    -- One row per agent run: what that run consumed (Apollo credits, Claude
+    -- tokens, Apify runs) and the estimated $ cost. Written by the agent via
+    -- /api/outbound/ingest; the Outbound page aggregates day/week/month.
+    CREATE TABLE IF NOT EXISTS agent_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_date TEXT NOT NULL,
+      apollo_enrichments INTEGER DEFAULT 0,
+      apollo_reveals INTEGER DEFAULT 0,
+      apollo_credits INTEGER DEFAULT 0,
+      apollo_cost_usd REAL DEFAULT 0,
+      anthropic_calls INTEGER DEFAULT 0,
+      anthropic_input_tokens INTEGER DEFAULT 0,
+      anthropic_output_tokens INTEGER DEFAULT 0,
+      anthropic_cost_usd REAL DEFAULT 0,
+      apify_runs INTEGER DEFAULT 0,
+      apify_cost_usd REAL DEFAULT 0,
+      total_cost_usd REAL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_date ON agent_usage(run_date DESC);
   `);
 
   // Additive migrations for databases created before these columns existed.
