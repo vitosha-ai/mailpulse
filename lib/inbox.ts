@@ -263,25 +263,75 @@ export function isJunk(subject: string, body: string, headers: string, fromEmail
   return false;
 }
 
+// A reply body usually carries a quoted copy of OUR outreach underneath
+// ("On … wrote:" / "> …" lines). Intent must be read from the prospect's own
+// words only — otherwise our own "can we schedule a call?" makes every reply
+// look "interested".
+export function replyOwnText(body: string): string {
+  let text = body ?? "";
+  for (const marker of [
+    /^On .{5,200} wrote:\s*/m,
+    /^-{2,}\s*Original Message\s*-{2,}\s*$/im,
+    /^_{5,}\s*$/m,
+    /^From:\s.+$/m,
+  ]) {
+    const i = text.search(marker);
+    if (i >= 0) text = text.slice(0, i);
+  }
+  return text
+    .split("\n")
+    .filter((l) => !l.trim().startsWith(">"))
+    .join("\n");
+}
+
 // Lightweight intent classifier for stored mail. Order matters: bounces and
-// human intents are recognized first; junk (unsolicited broadcast) is checked
-// before "interested" so a newsletter saying "pricing" can't masquerade as a
-// hot reply; anything left is "other".
+// auto-responses first; junk (unsolicited broadcast) before the intent
+// buckets; "declined" before "interested" so "not interested" can't match
+// \binterested; anything left is "other". Intent buckets read only the
+// prospect's own words (quoted thread stripped).
 export function categorize(subject: string, body: string, headers = "", fromEmail = ""): string {
   const t = `${subject} ${body}`.toLowerCase();
   if (/mailer-daemon|delivery (status|has failed)|undeliverable|failure notice|postmaster/.test(t))
     return "auto-reply";
   if (/\bout of (the )?office\b|\bon (leave|vacation|holiday|pto)\b|automatic reply|auto[- ]?reply|away from my (desk|email)/.test(t))
     return "out-of-office";
-  // Junk before the intent buckets: broadcast mail whose footer says
-  // "unsubscribe" must not land in the opt-out bucket, and a newsletter
-  // saying "pricing" must not land in "interested".
   if (isJunk(subject, body, headers, fromEmail)) return "junk";
-  if (/\bunsubscrib|\bremove me\b|\bopt[- ]?out\b|\bstop emailing\b|\btake me off\b|\bdo not (contact|email)\b/.test(t))
+
+  const own = `${subject} ${replyOwnText(body)}`.toLowerCase();
+  if (/\bunsubscrib|\bremove me\b|\bopt[- ]?out\b|\bstop emailing\b|\btake me off\b|\bdo not (contact|email)\b/.test(own))
     return "unsubscribe";
-  if (/\b(interested|sounds good|let'?s (talk|chat|connect)|book a (call|time|meeting)|schedule|tell me more|how much|pricing|send (me )?(more|info|details)|happy to|keen|yes[.,! ])/.test(t))
+  if (/\bnot interested\b|\bno,? thank(s| you)\b|\bnot a (priority|fit|good fit)\b|\bno need\b|\bwe'?re (all )?set\b|\balready (have|using|use|work(ing)? with)\b|\bjust (launched|implemented|selected|signed)\b|\bwent with\b|\bbetter fit\b|\bnot (looking|in the market)\b|\bdon'?t follow up\b/.test(own))
+    return "declined";
+  if (/\b(interested|sounds good|let'?s (talk|chat|connect)|book a (call|time|meeting)|schedule|tell me more|how much|pricing|send (me )?(more|info|details)|happy to|keen|yes[.,! ])/.test(own))
     return "interested";
   return "other";
+}
+
+// Re-run intent classification on stored human mail (quoted-thread stripping
+// and the "declined" bucket arrived after many rows were stored). Only the
+// intent buckets are revisited; OOO/bounce/junk rows keep their category.
+export function reclassifyIntent(): number {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT uid, from_email, subject, COALESCE(body,'') AS body, COALESCE(category,'') AS category
+       FROM inbox_messages
+       WHERE is_warmup = 0 AND COALESCE(category,'') IN ('interested','other','unsubscribe')`,
+    )
+    .all() as { uid: number; from_email: string; subject: string; body: string; category: string }[];
+  const upd = db.prepare("UPDATE inbox_messages SET category = ? WHERE uid = ?");
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      const next = categorize(r.subject || "", r.body, "", r.from_email || "");
+      if (next !== r.category) {
+        upd.run(next, r.uid);
+        n++;
+      }
+    }
+  });
+  tx();
+  return n;
 }
 
 // Retro-classify already-stored messages as junk. Headers weren't stored, so
@@ -363,7 +413,8 @@ export async function syncInbox(): Promise<string> {
     const recl = reclassifyWarmup();
     const junked = reclassifyJunk();
     const replies = reclassifyReplies();
-    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered, ${junked} junk reclassified, ${replies} replies flagged`;
+    const intents = reclassifyIntent();
+    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered, ${junked} junk reclassified, ${replies} replies flagged, ${intents} intents re-scored`;
     db.prepare("INSERT INTO sync_log (kind, ok, detail, finished_at) VALUES ('inbox', 1, ?, datetime('now'))").run(msg);
     return msg;
   } catch (e) {

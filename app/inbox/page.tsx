@@ -62,6 +62,7 @@ const TAG_CLS: Record<string, string> = {
 const CATS: { key: string; label: string }[] = [
   { key: "", label: "Replies" },
   { key: "interested", label: "Interested" },
+  { key: "declined", label: "Declined" },
   { key: "out-of-office", label: "Out of office" },
   { key: "unsubscribe", label: "Unsubscribe" },
   { key: "auto-reply", label: "Bounces" },
@@ -72,6 +73,7 @@ const CATS: { key: string; label: string }[] = [
 
 const CAT_BADGE: Record<string, string> = {
   interested: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300",
+  declined: "bg-rose-50 text-rose-600 ring-1 ring-rose-200",
   "out-of-office": "bg-amber-100 text-amber-700 ring-1 ring-amber-300",
   unsubscribe: "bg-red-100 text-red-700 ring-1 ring-red-400",
   "auto-reply": "bg-slate-100 text-slate-500 ring-1 ring-slate-300",
