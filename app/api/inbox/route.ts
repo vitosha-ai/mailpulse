@@ -15,15 +15,27 @@ export async function GET(request: NextRequest) {
   const sort = sp.get("sort") ?? "newest";
   const group = sp.get("group") ?? "";
 
+  const fresh = sp.get("fresh");
   const where = ["m.is_warmup = 0"];
   const params: unknown[] = [];
   if (category) {
     where.push("m.category = ?");
     params.push(category);
+  } else if (fresh === "1") {
+    // The side pile: fresh threads that aren't recognizably campaign-related.
+    // Rarely a real prospect (someone writing a brand-new email instead of
+    // replying) — worth an occasional glance, never the main view.
+    where.push(
+      "m.is_reply = 0 AND COALESCE(m.category,'') NOT IN ('out-of-office','auto-reply','unsubscribe','junk')",
+    );
   } else {
-    // Junk (unsolicited broadcast mail TO our senders) is hidden by default —
-    // visible only via its own category chip.
-    where.push("COALESCE(m.category, '') != 'junk'");
+    // REPLIES-ONLY default: show mail that demonstrably responds to something
+    // we sent — actual replies, plus auto-responses (OOO / bounces / opt-outs),
+    // which are by nature reactions to our campaigns. Unsolicited mail
+    // (including spam) can never appear here, because spam is never a reply.
+    where.push(
+      "(m.is_reply = 1 OR m.category IN ('out-of-office','auto-reply','unsubscribe'))",
+    );
   }
   if (unseen === "1") where.push("m.seen = 0");
   if (flagged === "1") where.push("m.flagged = 1");
@@ -94,11 +106,15 @@ export async function GET(request: NextRequest) {
     )
     .all();
 
+  const freshCount = scalar(
+    "SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND is_reply = 0 AND COALESCE(category,'') NOT IN ('out-of-office','auto-reply','unsubscribe','junk')",
+  );
+
   return NextResponse.json({
     messages,
     groups,
     tags,
-    counts: Object.fromEntries(counts.map((c) => [c.category, c.n])),
+    counts: { ...Object.fromEntries(counts.map((c) => [c.category, c.n])), __fresh: freshCount },
     unseen: scalar("SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND seen = 0"),
     flaggedCount: scalar("SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND flagged = 1"),
     pinnedCount: scalar("SELECT COUNT(*) n FROM inbox_messages WHERE is_warmup = 0 AND pinned = 1"),

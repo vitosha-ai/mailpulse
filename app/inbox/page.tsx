@@ -56,13 +56,17 @@ const TAG_CLS: Record<string, string> = {
   cyan: "bg-cyan-100 text-cyan-700 ring-cyan-300",
 };
 
+// "Replies" (default) shows only mail that responds to our campaigns — actual
+// replies plus auto-responses (OOO/bounces/opt-outs). "New threads" is the side
+// pile of fresh non-campaign mail (rarely a real prospect); "Junk" is broadcast spam.
 const CATS: { key: string; label: string }[] = [
-  { key: "", label: "All" },
+  { key: "", label: "Replies" },
   { key: "interested", label: "Interested" },
   { key: "out-of-office", label: "Out of office" },
   { key: "unsubscribe", label: "Unsubscribe" },
   { key: "auto-reply", label: "Bounces" },
   { key: "other", label: "Other" },
+  { key: "__fresh", label: "New threads" },
   { key: "junk", label: "Junk" },
 ];
 
@@ -92,7 +96,8 @@ export default function Inbox() {
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams();
-    if (cat) qs.set("category", cat);
+    if (cat === "__fresh") qs.set("fresh", "1");
+    else if (cat) qs.set("category", cat);
     if (search) qs.set("q", search);
     if (sort) qs.set("sort", sort);
     if (group) qs.set("group", group);

@@ -179,8 +179,8 @@ export function storeMessage(opts: {
   const info = db
     .prepare(
       `INSERT INTO inbox_messages
-        (uid, source, ext_id, message_id, from_email, from_name, to_email, subject, preview, body, received_at, category, is_warmup, seen)
-       VALUES (@uid, @source, @ext_id, @message_id, @from_email, @from_name, @to_email, @subject, @preview, @body, @received_at, @category, @is_warmup, 0)
+        (uid, source, ext_id, message_id, from_email, from_name, to_email, subject, preview, body, received_at, category, is_warmup, is_reply, seen)
+       VALUES (@uid, @source, @ext_id, @message_id, @from_email, @from_name, @to_email, @subject, @preview, @body, @received_at, @category, @is_warmup, @is_reply, 0)
        ON CONFLICT(source, ext_id) DO NOTHING`,
     )
     .run({
@@ -197,6 +197,7 @@ export function storeMessage(opts: {
       received_at: opts.date,
       category: warmup ? null : categorize(opts.subject, opts.body, opts.headers, opts.fromEmail),
       is_warmup: warmup ? 1 : 0,
+      is_reply: isReply(opts.subject, opts.headers) ? 1 : 0,
     });
   if (info.changes === 0) return "skip"; // already had it
   return warmup ? "warmup" : "stored";
@@ -204,9 +205,31 @@ export function storeMessage(opts: {
 
 // Was this message written in response to something we sent? Real prospect
 // replies carry an In-Reply-To/References header or a Re:/Fwd: subject.
-function isReply(subject: string, headers: string): boolean {
+export function isReply(subject: string, headers: string): boolean {
   if (/^\s*(re|fwd?|aw|sv|antw)\s*:/i.test(subject)) return true;
   return /(^|\n)\s*(in-reply-to|references)\s*:/i.test(headers);
+}
+
+// Backfill is_reply for messages stored before the column existed. Headers
+// weren't kept, so only the subject prefix is available — conservative but
+// covers the overwhelming majority of real replies.
+export function reclassifyReplies(): number {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT uid, subject FROM inbox_messages WHERE is_reply = 0 AND is_warmup = 0")
+    .all() as { uid: number; subject: string }[];
+  const flag = db.prepare("UPDATE inbox_messages SET is_reply = 1 WHERE uid = ?");
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      if (/^\s*(re|fwd?|aw|sv|antw)\s*:/i.test(r.subject || "")) {
+        flag.run(r.uid);
+        n++;
+      }
+    }
+  });
+  tx();
+  return n;
 }
 
 // Unsolicited mail sent TO our sender addresses: cold pitches from vendors,
@@ -325,10 +348,12 @@ export async function syncInbox(): Promise<string> {
       lock.release();
     }
     await client.logout();
-    // Belt-and-braces: re-scan for warmup and junk that slipped past earlier filters.
+    // Belt-and-braces: re-scan for warmup/junk that slipped past earlier filters,
+    // and backfill the is_reply flag on pre-existing rows.
     const recl = reclassifyWarmup();
     const junked = reclassifyJunk();
-    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered, ${junked} junk reclassified`;
+    const replies = reclassifyReplies();
+    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered, ${junked} junk reclassified, ${replies} replies flagged`;
     db.prepare("INSERT INTO sync_log (kind, ok, detail, finished_at) VALUES ('inbox', 1, ?, datetime('now'))").run(msg);
     return msg;
   } catch (e) {

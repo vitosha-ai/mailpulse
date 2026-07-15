@@ -243,6 +243,7 @@ function migrate(db: Database.Database) {
     "ALTER TABLE senders ADD COLUMN sh_zero_checked TEXT", // date of last zero-day increment
     "ALTER TABLE inbox_messages ADD COLUMN source TEXT NOT NULL DEFAULT 'maildoso'",
     "ALTER TABLE inbox_messages ADD COLUMN ext_id TEXT",
+    "ALTER TABLE inbox_messages ADD COLUMN is_reply INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE research_queue ADD COLUMN size TEXT",
     "ALTER TABLE research_queue ADD COLUMN researched_at TEXT",
     "ALTER TABLE research_queue ADD COLUMN fit_reason TEXT",
