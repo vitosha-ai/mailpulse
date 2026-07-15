@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
   if (category) {
     where.push("m.category = ?");
     params.push(category);
+  } else {
+    // Junk (unsolicited broadcast mail TO our senders) is hidden by default —
+    // visible only via its own category chip.
+    where.push("COALESCE(m.category, '') != 'junk'");
   }
   if (unseen === "1") where.push("m.seen = 0");
   if (flagged === "1") where.push("m.flagged = 1");

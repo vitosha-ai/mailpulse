@@ -63,6 +63,7 @@ const CATS: { key: string; label: string }[] = [
   { key: "unsubscribe", label: "Unsubscribe" },
   { key: "auto-reply", label: "Bounces" },
   { key: "other", label: "Other" },
+  { key: "junk", label: "Junk" },
 ];
 
 const CAT_BADGE: Record<string, string> = {
@@ -71,6 +72,7 @@ const CAT_BADGE: Record<string, string> = {
   unsubscribe: "bg-red-100 text-red-700 ring-1 ring-red-400",
   "auto-reply": "bg-slate-100 text-slate-500 ring-1 ring-slate-300",
   other: "bg-brand/10 text-brand ring-1 ring-brand/30",
+  junk: "bg-orange-100 text-orange-700 ring-1 ring-orange-300",
 };
 
 export default function Inbox() {

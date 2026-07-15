@@ -195,25 +195,87 @@ export function storeMessage(opts: {
       preview: warmup ? null : opts.body.slice(0, 300),
       body: warmup ? null : opts.body,
       received_at: opts.date,
-      category: warmup ? null : categorize(opts.subject, opts.body),
+      category: warmup ? null : categorize(opts.subject, opts.body, opts.headers, opts.fromEmail),
       is_warmup: warmup ? 1 : 0,
     });
   if (info.changes === 0) return "skip"; // already had it
   return warmup ? "warmup" : "stored";
 }
 
-// Lightweight intent classifier for real replies.
-export function categorize(subject: string, body: string): string {
+// Was this message written in response to something we sent? Real prospect
+// replies carry an In-Reply-To/References header or a Re:/Fwd: subject.
+function isReply(subject: string, headers: string): boolean {
+  if (/^\s*(re|fwd?|aw|sv|antw)\s*:/i.test(subject)) return true;
+  return /(^|\n)\s*(in-reply-to|references)\s*:/i.test(headers);
+}
+
+// Unsolicited mail sent TO our sender addresses: cold pitches from vendors,
+// newsletters, product notifications. Our sender domains are publicly visible,
+// so they get harvested and spammed — none of that is a prospect reply.
+// Principle: a fresh thread (not a reply) carrying broadcast-mail fingerprints.
+export function isJunk(subject: string, body: string, headers: string, fromEmail: string): boolean {
+  if (isReply(subject, headers)) return false;
+
+  const local = (fromEmail.split("@")[0] ?? "").toLowerCase();
+  // Sender local-parts that are never a human prospect.
+  if (/^(no-?reply|do-?not-?reply|notifications?|newsletters?|news|marketing|updates?|billing|invoices?|receipts?|alerts?|digest|hello|team|community|onboarding|success|careers|jobs)([._+-].*)?$/.test(local))
+    return true;
+
+  const h = headers.toLowerCase();
+  // Broadcast/campaign fingerprints on a fresh (non-reply) thread.
+  if (h.includes("list-unsubscribe")) return true;
+  if (/precedence\s*:\s*(bulk|list|junk)/.test(h)) return true;
+  if (/x-(campaign|mailchimp|sendgrid|mailgun|ses-outgoing|postmark|hubspot|marketo|klaviyo|brevo|sendinblue|constantcontact|mandrill|sparkpost)/.test(h))
+    return true;
+
+  // Unsubscribe/preferences footer in a fresh thread = broadcast mail.
+  if (/unsubscribe|manage (your )?(email )?preferences|update (your )?preferences|why (did i|am i) (get|receiv)/i.test(body))
+    return true;
+
+  return false;
+}
+
+// Lightweight intent classifier for stored mail. Order matters: bounces and
+// human intents are recognized first; junk (unsolicited broadcast) is checked
+// before "interested" so a newsletter saying "pricing" can't masquerade as a
+// hot reply; anything left is "other".
+export function categorize(subject: string, body: string, headers = "", fromEmail = ""): string {
   const t = `${subject} ${body}`.toLowerCase();
+  if (/mailer-daemon|delivery (status|has failed)|undeliverable|failure notice|postmaster/.test(t))
+    return "auto-reply";
   if (/\bout of (the )?office\b|\bon (leave|vacation|holiday|pto)\b|automatic reply|auto[- ]?reply|away from my (desk|email)/.test(t))
     return "out-of-office";
   if (/\bunsubscrib|\bremove me\b|\bopt[- ]?out\b|\bstop emailing\b|\btake me off\b|\bdo not (contact|email)\b/.test(t))
-    return "unsubscribe";
+    return isReply(subject, headers) || !isJunk(subject, body, headers, fromEmail) ? "unsubscribe" : "junk";
+  if (isJunk(subject, body, headers, fromEmail)) return "junk";
   if (/\b(interested|sounds good|let'?s (talk|chat|connect)|book a (call|time|meeting)|schedule|tell me more|how much|pricing|send (me )?(more|info|details)|happy to|keen|yes[.,! ])/.test(t))
     return "interested";
-  if (/mailer-daemon|delivery (status|has failed)|undeliverable|failure notice|postmaster/.test(t))
-    return "auto-reply";
   return "other";
+}
+
+// Retro-classify already-stored messages as junk. Headers weren't stored, so
+// this uses conservative signals only: a fresh thread (subject lacks Re:/Fwd:)
+// from a no-reply-style sender, or carrying an unsubscribe/preferences footer.
+export function reclassifyJunk(): number {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT uid, from_email, subject, COALESCE(body,'') AS body FROM inbox_messages
+       WHERE is_warmup = 0 AND COALESCE(category,'') NOT IN ('junk','unsubscribe','out-of-office','auto-reply')`,
+    )
+    .all() as { uid: number; from_email: string; subject: string; body: string }[];
+  const flag = db.prepare("UPDATE inbox_messages SET category = 'junk' WHERE uid = ?");
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      if (isJunk(r.subject || "", r.body, "", r.from_email || "")) {
+        flag.run(r.uid);
+        n++;
+      }
+    }
+  });
+  tx();
+  return n;
 }
 
 export async function syncInbox(): Promise<string> {
@@ -263,9 +325,10 @@ export async function syncInbox(): Promise<string> {
       lock.release();
     }
     await client.logout();
-    // Belt-and-braces: re-scan for any warmup that slipped past the live filter.
+    // Belt-and-braces: re-scan for warmup and junk that slipped past earlier filters.
     const recl = reclassifyWarmup();
-    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered`;
+    const junked = reclassifyJunk();
+    const msg = `${stored} new replies, ${warmupSkipped + recl} warmup filtered, ${junked} junk reclassified`;
     db.prepare("INSERT INTO sync_log (kind, ok, detail, finished_at) VALUES ('inbox', 1, ?, datetime('now'))").run(msg);
     return msg;
   } catch (e) {
