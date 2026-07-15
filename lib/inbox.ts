@@ -235,8 +235,20 @@ export function reclassifyReplies(): number {
 // Unsolicited mail sent TO our sender addresses: cold pitches from vendors,
 // newsletters, product notifications. Our sender domains are publicly visible,
 // so they get harvested and spammed — none of that is a prospect reply.
-// Principle: a fresh thread (not a reply) carrying broadcast-mail fingerprints.
 export function isJunk(subject: string, body: string, headers: string, fromEmail: string): boolean {
+  const h = headers.toLowerCase();
+
+  // HARD bulk-mail evidence — machine-sent broadcast, even when the subject
+  // fakes a "RE:" prefix (a common spammer trick):
+  // an unsubscribe LINK footer. No human reply carries one.
+  if (/unsubscribe\W{0,10}https?:\/\//i.test(body)) return true;
+  if (/https?:\/\/\S{0,120}unsub/i.test(body)) return true;
+  if (h.includes("list-unsubscribe")) return true;
+  if (/precedence\s*:\s*(bulk|list|junk)/.test(h)) return true;
+  if (/x-(campaign|mailchimp|sendgrid|mailgun|ses-outgoing|postmark|hubspot|marketo|klaviyo|brevo|sendinblue|constantcontact|mandrill|sparkpost)/.test(h))
+    return true;
+
+  // Everything below is a SOFT signal — only meaningful on a fresh thread.
   if (isReply(subject, headers)) return false;
 
   const local = (fromEmail.split("@")[0] ?? "").toLowerCase();
@@ -244,14 +256,7 @@ export function isJunk(subject: string, body: string, headers: string, fromEmail
   if (/^(no-?reply|do-?not-?reply|notifications?|newsletters?|news|marketing|updates?|billing|invoices?|receipts?|alerts?|digest|hello|team|community|onboarding|success|careers|jobs)([._+-].*)?$/.test(local))
     return true;
 
-  const h = headers.toLowerCase();
-  // Broadcast/campaign fingerprints on a fresh (non-reply) thread.
-  if (h.includes("list-unsubscribe")) return true;
-  if (/precedence\s*:\s*(bulk|list|junk)/.test(h)) return true;
-  if (/x-(campaign|mailchimp|sendgrid|mailgun|ses-outgoing|postmark|hubspot|marketo|klaviyo|brevo|sendinblue|constantcontact|mandrill|sparkpost)/.test(h))
-    return true;
-
-  // Unsubscribe/preferences footer in a fresh thread = broadcast mail.
+  // Unsubscribe/preferences wording in a fresh thread = broadcast mail.
   if (/unsubscribe|manage (your )?(email )?preferences|update (your )?preferences|why (did i|am i) (get|receiv)/i.test(body))
     return true;
 
@@ -268,23 +273,28 @@ export function categorize(subject: string, body: string, headers = "", fromEmai
     return "auto-reply";
   if (/\bout of (the )?office\b|\bon (leave|vacation|holiday|pto)\b|automatic reply|auto[- ]?reply|away from my (desk|email)/.test(t))
     return "out-of-office";
-  if (/\bunsubscrib|\bremove me\b|\bopt[- ]?out\b|\bstop emailing\b|\btake me off\b|\bdo not (contact|email)\b/.test(t))
-    return isReply(subject, headers) || !isJunk(subject, body, headers, fromEmail) ? "unsubscribe" : "junk";
+  // Junk before the intent buckets: broadcast mail whose footer says
+  // "unsubscribe" must not land in the opt-out bucket, and a newsletter
+  // saying "pricing" must not land in "interested".
   if (isJunk(subject, body, headers, fromEmail)) return "junk";
+  if (/\bunsubscrib|\bremove me\b|\bopt[- ]?out\b|\bstop emailing\b|\btake me off\b|\bdo not (contact|email)\b/.test(t))
+    return "unsubscribe";
   if (/\b(interested|sounds good|let'?s (talk|chat|connect)|book a (call|time|meeting)|schedule|tell me more|how much|pricing|send (me )?(more|info|details)|happy to|keen|yes[.,! ])/.test(t))
     return "interested";
   return "other";
 }
 
 // Retro-classify already-stored messages as junk. Headers weren't stored, so
-// this uses conservative signals only: a fresh thread (subject lacks Re:/Fwd:)
-// from a no-reply-style sender, or carrying an unsubscribe/preferences footer.
+// this uses the subject/body/sender signals only. The unsubscribe and
+// interested buckets are re-examined too — broadcast spam self-labels into
+// them (its own "Unsubscribe [link]" footer trips the opt-out regex); genuine
+// opt-out replies survive because they're replies without link footers.
 export function reclassifyJunk(): number {
   const db = getDb();
   const rows = db
     .prepare(
       `SELECT uid, from_email, subject, COALESCE(body,'') AS body FROM inbox_messages
-       WHERE is_warmup = 0 AND COALESCE(category,'') NOT IN ('junk','unsubscribe','out-of-office','auto-reply')`,
+       WHERE is_warmup = 0 AND COALESCE(category,'') NOT IN ('junk','out-of-office','auto-reply')`,
     )
     .all() as { uid: number; from_email: string; subject: string; body: string }[];
   const flag = db.prepare("UPDATE inbox_messages SET category = 'junk' WHERE uid = ?");
