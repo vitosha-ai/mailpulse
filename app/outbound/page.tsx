@@ -121,9 +121,60 @@ function rowsFor(text: string | null | undefined, min = 2): number {
   return Math.min(12, Math.max(min, byLength, byLines));
 }
 
+// "2026-07-16" → "Thu, Jul 16" for the day navigator (ISO stays in the value).
+function fmtDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+// One scope in the export menu: a label + hint, with .xlsx and .csv download links.
+function ExportGroup({
+  label,
+  hint,
+  xlsx,
+  csv,
+  onPick,
+  last,
+}: {
+  label: string;
+  hint: string;
+  xlsx: string;
+  csv: string;
+  onPick: () => void;
+  last?: boolean;
+}) {
+  return (
+    <div className={last ? "" : "border-b border-slate-100"}>
+      <div className="flex items-center justify-between px-3 pt-2.5">
+        <span className="text-xs font-semibold text-slate-700">{label}</span>
+        <span className="font-mono text-[10px] text-slate-400">{hint}</span>
+      </div>
+      <div className="flex gap-1.5 px-3 pb-2.5 pt-1.5">
+        <a
+          href={xlsx}
+          onClick={onPick}
+          className="flex-1 rounded-md bg-brand/10 px-2 py-1.5 text-center text-[11px] font-medium text-brand transition hover:bg-brand hover:text-white"
+        >
+          Excel .xlsx
+        </a>
+        <a
+          href={csv}
+          onClick={onPick}
+          className="flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-center text-[11px] font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+        >
+          CSV
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function Outbound() {
   const [date, setDate] = useState<string | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
+  const [showExport, setShowExport] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -150,6 +201,7 @@ export default function Outbound() {
     const data = await res.json();
     setDate(data.date);
     setDates(data.dates);
+    setDateCounts(data.dateCounts ?? {});
     setRows(data.rows);
     setCounts(data.counts);
     setSelectedId((prev) =>
@@ -175,6 +227,32 @@ export default function Outbound() {
     setEdits((e) => ({ ...e, [id]: { ...e[id], [key]: value } }));
 
   const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
+
+  // Prev/next day navigation. `dates` is newest-first, so "older" = higher index.
+  const dateIdx = date ? dates.indexOf(date) : -1;
+  const olderDate = dateIdx >= 0 && dateIdx < dates.length - 1 ? dates[dateIdx + 1] : null;
+  const newerDate = dateIdx > 0 ? dates[dateIdx - 1] : null;
+  const goToDate = (d: string | null) => {
+    if (!d) return;
+    setDate(d);
+    load(d);
+  };
+
+  // Build an /export URL that mirrors whatever the rep is currently looking at.
+  const exportUrl = (scope: "view" | "day" | "all", fmt: "xlsx" | "csv") => {
+    const p = new URLSearchParams();
+    p.set("format", fmt);
+    if (scope !== "all" && date) p.set("date", date);
+    if (scope === "view") {
+      // Apply the live filters so "current view" downloads exactly what's on screen.
+      if (statusFilter) p.set("status", statusFilter);
+      if (trigFilter) p.set("trigger", trigFilter);
+      if (confFilters.length) p.set("conf", confFilters.join(","));
+      if (noPocOnly) p.set("nopoc", "1");
+      if (q.trim()) p.set("q", q.trim());
+    }
+    return `/api/outbound/export?${p.toString()}`;
+  };
 
   // Trigger types present in today's batch (drives the filter dropdown).
   const trigTypes = useMemo(
@@ -399,21 +477,89 @@ export default function Outbound() {
 
         {/* Controls */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <select
-            value={date ?? ""}
-            onChange={(e) => {
-              setDate(e.target.value);
-              load(e.target.value);
-            }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm outline-none focus:border-brand"
-          >
-            {dates.length === 0 && <option value="">no queue yet</option>}
-            {dates.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+          {/* Day navigator: older ◂ [ date + count ] ▸ newer  ·  jump to newest */}
+          <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white shadow-sm">
+            <button
+              onClick={() => goToDate(olderDate)}
+              disabled={!olderDate}
+              title={olderDate ? `Older day · ${olderDate}` : "No older day"}
+              className="rounded-l-lg px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            >
+              ◂
+            </button>
+            <div className="relative">
+              <select
+                value={date ?? ""}
+                onChange={(e) => goToDate(e.target.value)}
+                className="cursor-pointer appearance-none bg-transparent px-2 py-2 text-center text-sm font-medium text-slate-800 outline-none"
+              >
+                {dates.length === 0 && <option value="">no queue yet</option>}
+                {dates.map((d) => (
+                  <option key={d} value={d}>
+                    {fmtDay(d)} · {dateCounts[d] ?? 0} lead{(dateCounts[d] ?? 0) === 1 ? "" : "s"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => goToDate(newerDate)}
+              disabled={!newerDate}
+              title={newerDate ? `Newer day · ${newerDate}` : "No newer day"}
+              className="px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            >
+              ▸
+            </button>
+            {dates.length > 1 && date !== dates[0] && (
+              <button
+                onClick={() => goToDate(dates[0])}
+                title={`Jump to newest · ${dates[0]}`}
+                className="rounded-r-lg border-l border-slate-200 px-2.5 py-2 text-[11px] font-medium text-brand transition hover:bg-slate-50"
+              >
+                latest
+              </button>
+            )}
+          </div>
+
+          {/* Export menu — flexible scope × format */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExport((v) => !v)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand hover:text-brand"
+            >
+              <span aria-hidden>⭳</span> Export
+              <span className="text-[10px] text-slate-400">{showExport ? "▴" : "▾"}</span>
+            </button>
+            {showExport && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                  <ExportGroup
+                    label="This day"
+                    hint={date ? `${fmtDay(date)} · ${dateCounts[date] ?? 0} leads` : "current day"}
+                    xlsx={exportUrl("day", "xlsx")}
+                    csv={exportUrl("day", "csv")}
+                    onPick={() => setShowExport(false)}
+                  />
+                  <ExportGroup
+                    label="Current view"
+                    hint={`${visible.length} filtered lead${visible.length === 1 ? "" : "s"}`}
+                    xlsx={exportUrl("view", "xlsx")}
+                    csv={exportUrl("view", "csv")}
+                    onPick={() => setShowExport(false)}
+                  />
+                  <ExportGroup
+                    label="All days"
+                    hint="every lead ever queued"
+                    xlsx={exportUrl("all", "xlsx")}
+                    csv={exportUrl("all", "csv")}
+                    onPick={() => setShowExport(false)}
+                    last
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() => setStatusFilter("")}

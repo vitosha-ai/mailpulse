@@ -7,9 +7,12 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const db = getDb();
 
+  // Every day that has leads, with its lead count (drives the day navigator).
   const dates = db
-    .prepare("SELECT DISTINCT queued_date FROM research_queue ORDER BY queued_date DESC")
-    .all() as { queued_date: string }[];
+    .prepare(
+      "SELECT queued_date, COUNT(*) AS n FROM research_queue GROUP BY queued_date ORDER BY queued_date DESC",
+    )
+    .all() as { queued_date: string; n: number }[];
 
   const date = sp.get("date") || dates[0]?.queued_date || null;
   const status = sp.get("status");
@@ -46,6 +49,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     date,
     dates: dates.map((d) => d.queued_date),
+    dateCounts: Object.fromEntries(dates.map((d) => [d.queued_date, d.n])),
     rows,
     counts: Object.fromEntries(counts.map((c) => [c.status, c.n])),
   });
