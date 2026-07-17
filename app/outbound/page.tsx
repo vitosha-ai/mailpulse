@@ -65,6 +65,8 @@ type CostAgg = {
   anthropic_cost_usd: number;
   apify_runs: number;
   apify_cost_usd: number;
+  brightdata_records: number;
+  brightdata_cost_usd: number;
   total_cost_usd: number;
 };
 
@@ -100,6 +102,12 @@ function CostCard({ label, agg }: { label: string; agg: CostAgg }) {
           <span>Apify · {agg.apify_runs} runs</span>
           <span className="font-medium text-slate-800">{usd(agg.apify_cost_usd)}</span>
         </div>
+        {(agg.brightdata_records ?? 0) > 0 && (
+          <div className="flex justify-between">
+            <span>LinkedIn · {compact(agg.brightdata_records)} rec</span>
+            <span className="font-medium text-slate-800">{usd(agg.brightdata_cost_usd)}</span>
+          </div>
+        )}
       </div>
       <p className="mt-2 text-[11px] text-slate-400">{agg.runs} agent run{agg.runs === 1 ? "" : "s"}</p>
     </div>

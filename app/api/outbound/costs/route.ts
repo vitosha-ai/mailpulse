@@ -12,6 +12,8 @@ type Agg = {
   anthropic_cost_usd: number;
   apify_runs: number;
   apify_cost_usd: number;
+  brightdata_records: number;
+  brightdata_cost_usd: number;
   total_cost_usd: number;
 };
 
@@ -26,6 +28,8 @@ function aggregate(sinceIso: string | null): Agg {
               COALESCE(SUM(anthropic_cost_usd), 0) AS anthropic_cost_usd,
               COALESCE(SUM(apify_runs), 0) AS apify_runs,
               COALESCE(SUM(apify_cost_usd), 0) AS apify_cost_usd,
+              COALESCE(SUM(brightdata_records), 0) AS brightdata_records,
+              COALESCE(SUM(brightdata_cost_usd), 0) AS brightdata_cost_usd,
               COALESCE(SUM(total_cost_usd), 0) AS total_cost_usd
        FROM agent_usage ${sinceIso ? "WHERE run_date >= ?" : ""}`,
     )

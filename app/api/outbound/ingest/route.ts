@@ -20,7 +20,8 @@ type Row = Partial<Record<(typeof COLS)[number], string>>;
 const USAGE_COLS = [
   "apollo_enrichments", "apollo_reveals", "apollo_credits", "apollo_cost_usd",
   "anthropic_calls", "anthropic_input_tokens", "anthropic_output_tokens",
-  "anthropic_cost_usd", "apify_runs", "apify_cost_usd", "total_cost_usd",
+  "anthropic_cost_usd", "apify_runs", "apify_cost_usd",
+  "brightdata_records", "brightdata_cost_usd", "total_cost_usd",
 ] as const;
 
 type UsageRecord = Partial<Record<(typeof USAGE_COLS)[number], number>>;

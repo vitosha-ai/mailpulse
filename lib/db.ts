@@ -217,6 +217,8 @@ function migrate(db: Database.Database) {
       anthropic_cost_usd REAL DEFAULT 0,
       apify_runs INTEGER DEFAULT 0,
       apify_cost_usd REAL DEFAULT 0,
+      brightdata_records INTEGER DEFAULT 0,
+      brightdata_cost_usd REAL DEFAULT 0,
       total_cost_usd REAL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -248,6 +250,8 @@ function migrate(db: Database.Database) {
     "ALTER TABLE research_queue ADD COLUMN researched_at TEXT",
     "ALTER TABLE research_queue ADD COLUMN fit_reason TEXT",
     "ALTER TABLE research_queue ADD COLUMN research_trail TEXT",
+    "ALTER TABLE agent_usage ADD COLUMN brightdata_records INTEGER DEFAULT 0",
+    "ALTER TABLE agent_usage ADD COLUMN brightdata_cost_usd REAL DEFAULT 0",
   ];
   for (const stmt of addColumns) {
     try {
