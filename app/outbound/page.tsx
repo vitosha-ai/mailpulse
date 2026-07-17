@@ -31,7 +31,10 @@ type Row = {
   researched_at: string | null;
   fit_reason: string | null;
   research_trail: string | null;
+  market: string | null;
 };
+
+const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC" };
 
 const STATUSES = ["Pending", "Verified", "Edited", "Sent", "Rejected", "Skipped"] as const;
 
@@ -192,6 +195,7 @@ export default function Outbound() {
   const [trigFilter, setTrigFilter] = useState("");
   const [confFilters, setConfFilters] = useState<string[]>([]);
   const [noPocOnly, setNoPocOnly] = useState(false);
+  const [marketFilter, setMarketFilter] = useState("");
   const [sortBy, setSortBy] = useState<"confidence" | "company" | "recent">("confidence");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, Partial<Row>>>({});
@@ -284,6 +288,13 @@ export default function Outbound() {
     [rows],
   );
 
+  // Markets present in this day's rows. The US/GCC chips render only when more
+  // than one market exists, so the page is unchanged for a single-market team.
+  const markets = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.market || "us"))).sort(),
+    [rows],
+  );
+
   const CONF_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
   // The list the rep actually sees: search + filters + sort, all instant.
@@ -294,6 +305,7 @@ export default function Outbound() {
       if (trigFilter && r.trigger_type !== trigFilter) return false;
       if (confFilters.length && !confFilters.includes(r.confidence ?? "Low")) return false;
       if (noPocOnly && (r.first_name || r.verified_email)) return false;
+      if (marketFilter && (r.market || "us") !== marketFilter) return false;
       if (needle) {
         const hay = `${r.company} ${r.first_name} ${r.last_name} ${r.title} ${r.verified_email}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -310,7 +322,7 @@ export default function Outbound() {
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, statusFilter, trigFilter, confFilters, noPocOnly, sortBy]);
+  }, [rows, q, statusFilter, trigFilter, confFilters, noPocOnly, marketFilter, sortBy]);
 
   // Keep the selection inside the visible set as filters change.
   useEffect(() => {
@@ -726,9 +738,33 @@ export default function Outbound() {
                     );
                   })}
                 </div>
+
+                {/* Market chips — only when this day mixes US + GCC rows */}
+                {markets.length > 1 && (
+                  <div className="flex gap-1.5">
+                    {markets.map((m) => {
+                      const on = marketFilter === m;
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => setMarketFilter(on ? "" : m)}
+                          title={on ? "Show all markets" : `Only ${MARKET_LABELS[m] ?? m.toUpperCase()} leads`}
+                          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide shadow-sm transition ${
+                            on
+                              ? "border-brand/50 bg-brand/5 text-brand"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                          }`}
+                        >
+                          {MARKET_LABELS[m] ?? m.toUpperCase()}
+                          {on && <span className="text-[9px]">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <p className="px-0.5 text-[11px] text-slate-400">
                   {visible.length} of {rows.length} lead{rows.length === 1 ? "" : "s"}
-                  {(q || trigFilter || confFilters.length > 0 || noPocOnly || statusFilter) && (
+                  {(q || trigFilter || confFilters.length > 0 || noPocOnly || statusFilter || marketFilter) && (
                     <button
                       onClick={() => {
                         setQ("");
@@ -736,6 +772,7 @@ export default function Outbound() {
                         setConfFilters([]);
                         setNoPocOnly(false);
                         setStatusFilter("");
+                        setMarketFilter("");
                       }}
                       className="ml-2 font-medium text-brand hover:underline"
                     >

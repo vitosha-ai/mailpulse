@@ -12,7 +12,7 @@ const COLS = [
   "bucket", "detected_stack", "pillar", "proof_point",
   "subject", "email_1", "followup_day_3", "followup_day_8", "breakup_day_15",
   "confidence", "status", "rep_notes",
-  "size", "researched_at", "fit_reason", "research_trail",
+  "size", "researched_at", "fit_reason", "research_trail", "market",
 ] as const;
 
 type Row = Partial<Record<(typeof COLS)[number], string>>;
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       const rec: Record<string, string> = { queued_date: queuedDate };
       for (const c of COLS) rec[c] = r[c] ?? "";
       if (!rec.status) rec.status = "Pending";
+      if (!rec.market) rec.market = "us"; // rows from the pre-market US agent
       inserted += stmt.run(rec).changes;
     }
   });
@@ -64,11 +65,14 @@ export async function POST(request: NextRequest) {
   // Optional per-run usage/cost record (appended, one row per agent run).
   let usageRecorded = false;
   if (body.usage && typeof body.usage === "object") {
+    const u = body.usage as Record<string, unknown>;
     const rec: Record<string, number | string> = { run_date: queuedDate };
-    for (const c of USAGE_COLS) rec[c] = Number(body.usage[c] ?? 0) || 0;
+    for (const c of USAGE_COLS) rec[c] = Number(u[c] ?? 0) || 0;
+    // market rides along as a string (numeric coercion would destroy it)
+    rec.market = typeof u.market === "string" && u.market ? u.market : "us";
     db.prepare(
-      `INSERT INTO agent_usage (run_date, ${USAGE_COLS.join(", ")})
-       VALUES (@run_date, ${USAGE_COLS.map((c) => "@" + c).join(", ")})`,
+      `INSERT INTO agent_usage (run_date, market, ${USAGE_COLS.join(", ")})
+       VALUES (@run_date, @market, ${USAGE_COLS.map((c) => "@" + c).join(", ")})`,
     ).run(rec);
     usageRecorded = true;
   }

@@ -252,6 +252,8 @@ function migrate(db: Database.Database) {
     "ALTER TABLE research_queue ADD COLUMN research_trail TEXT",
     "ALTER TABLE agent_usage ADD COLUMN brightdata_records INTEGER DEFAULT 0",
     "ALTER TABLE agent_usage ADD COLUMN brightdata_cost_usd REAL DEFAULT 0",
+    "ALTER TABLE research_queue ADD COLUMN market TEXT DEFAULT 'us'",
+    "ALTER TABLE agent_usage ADD COLUMN market TEXT DEFAULT 'us'",
   ];
   for (const stmt of addColumns) {
     try {

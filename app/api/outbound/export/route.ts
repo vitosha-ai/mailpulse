@@ -40,6 +40,7 @@ const COLS: { key: string; header: string; width: number }[] = [
   { key: "fit_reason", header: "Fit Justification", width: 50 },
   { key: "research_trail", header: "Research Trail", width: 60 },
   { key: "researched_at", header: "Researched At", width: 18 },
+  { key: "market", header: "Market", width: 8 },
 ];
 
 export async function GET(request: NextRequest) {
