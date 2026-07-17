@@ -78,12 +78,18 @@ export async function GET(request: NextRequest) {
     scopeName = `${market}-${scopeName}`;
   }
   if (status) {
-    where.push("status = ?");
-    params.push(status);
+    const list = status.split(",").map((s) => s.trim()).filter(Boolean);
+    if (list.length) {
+      where.push(`status IN (${list.map(() => "?").join(",")})`);
+      params.push(...list);
+    }
   }
   if (trigger) {
-    where.push("trigger_type = ?");
-    params.push(trigger);
+    const list = trigger.split(",").map((s) => s.trim()).filter(Boolean);
+    if (list.length) {
+      where.push(`trigger_type IN (${list.map(() => "?").join(",")})`);
+      params.push(...list);
+    }
   }
   if (conf) {
     const levels = conf.split(",").map((s) => s.trim()).filter(Boolean);

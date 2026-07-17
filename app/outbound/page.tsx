@@ -196,9 +196,16 @@ export default function Outbound() {
   const [rangeTo, setRangeTo] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
   const [q, setQ] = useState("");
-  const [trigFilter, setTrigFilter] = useState("");
+  const [trigFilters, setTrigFilters] = useState<string[]>([]);
+  const [showTrigMenu, setShowTrigMenu] = useState(false);
+  // What span of days the list shows: one day (default), a rolling window,
+  // everything, or a custom from/to range.
+  const [viewMode, setViewMode] = useState<"day" | "7d" | "30d" | "all" | "custom">("day");
+  const [viewFrom, setViewFrom] = useState("");
+  const [viewTo, setViewTo] = useState("");
+  const [showRangeMenu, setShowRangeMenu] = useState(false);
   const [confFilters, setConfFilters] = useState<string[]>([]);
   const [noPocOnly, setNoPocOnly] = useState(false);
   const [marketFilter, setMarketFilter] = useState("");
@@ -218,23 +225,56 @@ export default function Outbound() {
   const detailRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async (d?: string | null) => {
-    const params = new URLSearchParams();
-    if (d) params.set("date", d);
-    const res = await fetch(`/api/outbound?${params}`);
-    const data = await res.json();
-    setDate(data.date);
-    setDates(data.dates);
-    setDateCounts(data.dateCounts ?? {});
-    setRows(data.rows);
-    setCounts(data.counts);
-    setSelectedId((prev) =>
-      prev && (data.rows as Row[]).some((r) => r.id === prev) ? prev : (data.rows[0]?.id ?? null),
-    );
-  }, []);
+  const isoDaysAgo = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const load = useCallback(
+    async (opts?: { date?: string | null; mode?: typeof viewMode; from?: string; to?: string }) => {
+      const mode = opts?.mode ?? "day";
+      const params = new URLSearchParams();
+      if (mode === "day") {
+        if (opts?.date) params.set("date", opts.date);
+      } else if (mode === "7d") params.set("from", isoDaysAgo(6));
+      else if (mode === "30d") params.set("from", isoDaysAgo(29));
+      else if (mode === "all") params.set("all", "1");
+      else if (mode === "custom") {
+        let f = opts?.from ?? "";
+        let t = opts?.to ?? "";
+        if (f && t && f > t) [f, t] = [t, f];
+        if (f) params.set("from", f);
+        if (t) params.set("to", t);
+      }
+      const res = await fetch(`/api/outbound?${params}`);
+      const data = await res.json();
+      if (data.date) setDate(data.date);
+      setDates(data.dates);
+      setDateCounts(data.dateCounts ?? {});
+      setRows(data.rows);
+      setCounts(data.counts);
+      setSelectedId((prev) =>
+        prev && (data.rows as Row[]).some((r) => r.id === prev) ? prev : (data.rows[0]?.id ?? null),
+      );
+    },
+    [],
+  );
+
+  // Switch the visible span and fetch it.
+  const setSpan = useCallback(
+    (mode: "day" | "7d" | "30d" | "all" | "custom", from = "", to = "") => {
+      setViewMode(mode);
+      setViewFrom(from);
+      setViewTo(to);
+      setShowRangeMenu(false);
+      load(mode === "day" ? { date, mode } : { mode, from, to });
+    },
+    [date, load],
+  );
 
   useEffect(() => {
-    load(date);
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -282,7 +322,20 @@ export default function Outbound() {
   const goToDate = (d: string | null) => {
     if (!d) return;
     setDate(d);
-    load(d);
+    setViewMode("day");
+    load({ date: d, mode: "day" });
+  };
+
+  // The current span, as export/query params (mirrors what's on screen).
+  const spanParams = (p: URLSearchParams) => {
+    if (viewMode === "day") {
+      if (date) p.set("date", date);
+    } else if (viewMode === "7d") p.set("from", isoDaysAgo(6));
+    else if (viewMode === "30d") p.set("from", isoDaysAgo(29));
+    else if (viewMode === "custom") {
+      if (viewFrom) p.set("from", viewFrom);
+      if (viewTo) p.set("to", viewTo);
+    } // "all" = no bounds
   };
 
   // Build an /export URL that mirrors whatever the rep is currently looking at.
@@ -290,11 +343,11 @@ export default function Outbound() {
     const p = new URLSearchParams();
     p.set("format", fmt);
     if (marketScope) p.set("market", marketScope); // stay inside the entered region
-    if (scope !== "all" && date) p.set("date", date);
+    if (scope !== "all") spanParams(p);
     if (scope === "view") {
       // Apply the live filters so "current view" downloads exactly what's on screen.
-      if (statusFilter) p.set("status", statusFilter);
-      if (trigFilter) p.set("trigger", trigFilter);
+      if (statusFilters.length) p.set("status", statusFilters.join(","));
+      if (trigFilters.length) p.set("trigger", trigFilters.join(","));
       if (confFilters.length) p.set("conf", confFilters.join(","));
       if (noPocOnly) p.set("nopoc", "1");
       if (q.trim()) p.set("q", q.trim());
@@ -342,8 +395,8 @@ export default function Outbound() {
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const out = scopedRows.filter((r) => {
-      if (statusFilter && r.status !== statusFilter) return false;
-      if (trigFilter && r.trigger_type !== trigFilter) return false;
+      if (statusFilters.length && !statusFilters.includes(r.status)) return false;
+      if (trigFilters.length && !trigFilters.includes(r.trigger_type ?? "")) return false;
       if (confFilters.length && !confFilters.includes(r.confidence ?? "Low")) return false;
       if (noPocOnly && (r.first_name || r.verified_email)) return false;
       if (marketFilter && (r.market || "us") !== marketFilter) return false;
@@ -363,7 +416,7 @@ export default function Outbound() {
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedRows, q, statusFilter, trigFilter, confFilters, noPocOnly, marketFilter, sortBy]);
+  }, [scopedRows, q, statusFilters, trigFilters, confFilters, noPocOnly, marketFilter, sortBy]);
 
   // Keep the selection inside the visible set as filters change.
   useEffect(() => {
@@ -649,48 +702,116 @@ export default function Outbound() {
 
         {/* Controls */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          {/* Day navigator: older ◂ [ date + count ] ▸ newer  ·  jump to newest */}
-          <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white shadow-sm">
-            <button
-              onClick={() => goToDate(olderDate)}
-              disabled={!olderDate}
-              title={olderDate ? `Older day · ${olderDate}` : "No older day"}
-              className="rounded-l-lg px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
-            >
-              ◂
-            </button>
-            <div className="relative">
-              <select
-                value={date ?? ""}
-                onChange={(e) => goToDate(e.target.value)}
-                className="cursor-pointer appearance-none bg-transparent px-2 py-2 text-center text-sm font-medium text-slate-800 outline-none"
-              >
-                {dates.length === 0 && <option value="">no queue yet</option>}
-                {dates.map((d) => (
-                  <option key={d} value={d}>
-                    {fmtDay(d)} · {dateCounts[d] ?? 0} lead{(dateCounts[d] ?? 0) === 1 ? "" : "s"}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={() => goToDate(newerDate)}
-              disabled={!newerDate}
-              title={newerDate ? `Newer day · ${newerDate}` : "No newer day"}
-              className="px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
-            >
-              ▸
-            </button>
-            {dates.length > 1 && date !== dates[0] && (
+          {/* Span: one day (with ◂ ▸ navigation), rolling windows, all, or custom range */}
+          <div className="flex items-center rounded-lg border border-slate-300 bg-white shadow-sm">
+            {(
+              [
+                ["day", "Day"],
+                ["7d", "7 days"],
+                ["30d", "30 days"],
+                ["all", "All"],
+              ] as const
+            ).map(([m, label]) => (
               <button
-                onClick={() => goToDate(dates[0])}
-                title={`Jump to newest · ${dates[0]}`}
-                className="rounded-r-lg border-l border-slate-200 px-2.5 py-2 text-[11px] font-medium text-brand transition hover:bg-slate-50"
+                key={m}
+                onClick={() => setSpan(m)}
+                className={`px-3 py-2 text-xs font-medium transition first:rounded-l-lg ${
+                  viewMode === m ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
               >
-                latest
+                {label}
               </button>
-            )}
+            ))}
+            <div className="relative">
+              <button
+                onClick={() => setShowRangeMenu((v) => !v)}
+                className={`rounded-r-lg border-l border-slate-200 px-3 py-2 text-xs font-medium transition ${
+                  viewMode === "custom" ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {viewMode === "custom" && (viewFrom || viewTo)
+                  ? `${viewFrom || "…"} → ${viewTo || "…"}`
+                  : "Range ▾"}
+              </button>
+              {showRangeMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowRangeMenu(false)} />
+                  <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                    <p className="mb-2 text-xs font-semibold text-slate-700">Custom date range</p>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={viewFrom}
+                        max={dates[0] || undefined}
+                        onChange={(e) => setViewFrom(e.target.value)}
+                        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] text-slate-700 outline-none focus:border-brand"
+                      />
+                      <span className="text-[11px] text-slate-400">→</span>
+                      <input
+                        type="date"
+                        value={viewTo}
+                        max={dates[0] || undefined}
+                        onChange={(e) => setViewTo(e.target.value)}
+                        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] text-slate-700 outline-none focus:border-brand"
+                      />
+                    </div>
+                    <button
+                      onClick={() => (viewFrom || viewTo) && setSpan("custom", viewFrom, viewTo)}
+                      disabled={!viewFrom && !viewTo}
+                      className="mt-2 w-full rounded-md bg-brand/10 px-2 py-1.5 text-xs font-medium text-brand transition hover:bg-brand hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Show range
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Day navigator — only meaningful in single-day mode */}
+          {viewMode === "day" && (
+            <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white shadow-sm">
+              <button
+                onClick={() => goToDate(olderDate)}
+                disabled={!olderDate}
+                title={olderDate ? `Older day · ${olderDate}` : "No older day"}
+                className="rounded-l-lg px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                ◂
+              </button>
+              <div className="relative">
+                <select
+                  value={date ?? ""}
+                  onChange={(e) => goToDate(e.target.value)}
+                  className="cursor-pointer appearance-none bg-transparent px-2 py-2 text-center text-sm font-medium text-slate-800 outline-none"
+                >
+                  {dates.length === 0 && <option value="">no queue yet</option>}
+                  {dates.map((d) => (
+                    <option key={d} value={d}>
+                      {fmtDay(d)} · {dateCounts[d] ?? 0} lead{(dateCounts[d] ?? 0) === 1 ? "" : "s"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => goToDate(newerDate)}
+                disabled={!newerDate}
+                title={newerDate ? `Newer day · ${newerDate}` : "No newer day"}
+                className="px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                ▸
+              </button>
+              {dates.length > 1 && date !== dates[0] && (
+                <button
+                  onClick={() => goToDate(dates[0])}
+                  title={`Jump to newest · ${dates[0]}`}
+                  className="rounded-r-lg border-l border-slate-200 px-2.5 py-2 text-[11px] font-medium text-brand transition hover:bg-slate-50"
+                >
+                  latest
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Export menu — flexible scope × format */}
           <div className="relative">
@@ -706,8 +827,14 @@ export default function Outbound() {
                 <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />
                 <div className="absolute left-0 top-full z-20 mt-1.5 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
                   <ExportGroup
-                    label="This day"
-                    hint={date ? `${fmtDay(date)} · ${dateCounts[date] ?? 0} leads` : "current day"}
+                    label={viewMode === "day" ? "This day" : "Current span"}
+                    hint={
+                      viewMode === "day"
+                        ? date
+                          ? `${fmtDay(date)} · ${dateCounts[date] ?? 0} leads`
+                          : "current day"
+                        : `${scopedRows.length} leads in view span`
+                    }
                     xlsx={exportUrl("day", "xlsx")}
                     csv={exportUrl("day", "csv")}
                     onPick={() => setShowExport(false)}
@@ -780,78 +907,126 @@ export default function Outbound() {
             )}
           </div>
 
+          {/* Status — multi-select: click several to combine (e.g. Pending + Verified) */}
           <div className="flex flex-wrap gap-1.5">
             <button
-              onClick={() => setStatusFilter("")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilter === "" ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              onClick={() => setStatusFilters([])}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilters.length === 0 ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
             >
               All {total ? `· ${total}` : ""}
             </button>
-            {STATUSES.map((s) =>
-              counts[s] ? (
+            {STATUSES.map((s) => {
+              if (!counts[s]) return null;
+              const on = statusFilters.includes(s);
+              return (
                 <button
                   key={s}
-                  onClick={() => setStatusFilter(s === statusFilter ? "" : s)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilter === s ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+                  onClick={() =>
+                    setStatusFilters((prev) => (on ? prev.filter((x) => x !== s) : [...prev, s]))
+                  }
+                  title={on ? `Remove ${s} from filter` : `Add ${s} to filter`}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${on ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
                 >
                   {s} · {counts[s]}
+                  {on && <span className="ml-1 text-[9px]">✓</span>}
                 </button>
-              ) : null,
-            )}
+              );
+            })}
           </div>
           <span className="ml-auto hidden text-[11px] text-slate-400 lg:inline">↑↓ to move between leads</span>
         </div>
 
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-            No rows for this day. The research agent writes here each morning.
+            {viewMode === "day"
+              ? "No rows for this day. The research agent writes here each morning."
+              : "No rows in this span. Try a wider range or jump back to Day view."}
           </div>
         ) : (
           <div className="flex flex-col gap-4 lg:h-[calc(100vh-13rem)] lg:flex-row">
             {/* ------- Left: search + filters + lead list ------- */}
-            <div className="flex shrink-0 flex-col lg:w-[330px]">
-              <div className="mb-2 space-y-1.5">
+            <div className="flex shrink-0 flex-col lg:w-[360px]">
+              <div className="mb-3 space-y-2">
                 <input
                   ref={searchRef}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Search company, name, title…  ( / )"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
                 />
-                <div className="flex gap-1.5">
-                  <select
-                    value={trigFilter}
-                    onChange={(e) => setTrigFilter(e.target.value)}
-                    className={`min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-[11px] shadow-sm outline-none focus:border-brand ${trigFilter ? "border-brand/50 text-brand font-medium" : "border-slate-200 text-slate-600"}`}
-                  >
-                    <option value="">All triggers</option>
-                    {trigTypes.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex gap-2">
+                  {/* Triggers — multi-select popover (pick several together) */}
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      onClick={() => setShowTrigMenu((v) => !v)}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-left text-xs shadow-sm outline-none transition ${
+                        trigFilters.length
+                          ? "border-brand/50 font-medium text-brand"
+                          : "border-slate-200 text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {trigFilters.length === 0
+                        ? "All triggers"
+                        : trigFilters.length === 1
+                          ? trigFilters[0]
+                          : `${trigFilters.length} triggers`}
+                      <span className="float-right text-[10px] text-slate-400">▾</span>
+                    </button>
+                    {showTrigMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowTrigMenu(false)} />
+                        <div className="absolute left-0 top-full z-20 mt-1.5 w-full min-w-[220px] rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
+                          {trigTypes.map((t) => {
+                            const on = trigFilters.includes(t);
+                            return (
+                              <button
+                                key={t}
+                                onClick={() =>
+                                  setTrigFilters((prev) =>
+                                    on ? prev.filter((x) => x !== t) : [...prev, t],
+                                  )
+                                }
+                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50"
+                              >
+                                <span
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                    on ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"
+                                  }`}
+                                >
+                                  {on ? "✓" : ""}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate">{t}</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {scopedRows.filter((r) => r.trigger_type === t).length}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {trigFilters.length > 0 && (
+                            <button
+                              onClick={() => setTrigFilters([])}
+                              className="mt-1 w-full border-t border-slate-100 px-3.5 py-2 text-left text-[11px] font-medium text-brand hover:bg-slate-50"
+                            >
+                              Clear — show all triggers
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600 shadow-sm outline-none focus:border-brand"
+                    className="w-[118px] shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-600 shadow-sm outline-none focus:border-brand"
                   >
                     <option value="confidence">Conf. first</option>
                     <option value="company">Company A–Z</option>
                     <option value="recent">Newest trigger</option>
                   </select>
-                  <button
-                    onClick={() => setNoPocOnly((v) => !v)}
-                    title="Only leads with no contact (manual sourcing)"
-                    className={`shrink-0 rounded-lg border px-2 py-1.5 text-[11px] font-medium shadow-sm transition ${
-                      noPocOnly ? "border-red-300 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                    }`}
-                  >
-                    no&nbsp;POC
-                  </button>
                 </div>
-                {/* Confidence — multi-select chips (e.g. High + Medium together) */}
-                <div className="flex gap-1.5">
+                {/* Confidence — multi-select chips (e.g. High + Medium together),
+                    plus the no-contact toggle at the end of the row */}
+                <div className="flex gap-2">
                   {(["High", "Medium", "Low"] as const).map((c) => {
                     const on = confFilters.includes(c);
                     return (
@@ -861,7 +1036,7 @@ export default function Outbound() {
                           setConfFilters((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))
                         }
                         title={on ? `Hide ${c} confidence` : `Include ${c} confidence`}
-                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-medium shadow-sm transition ${
+                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium shadow-sm transition ${
                           on
                             ? "border-brand/50 bg-brand/5 text-brand"
                             : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
@@ -873,6 +1048,15 @@ export default function Outbound() {
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setNoPocOnly((v) => !v)}
+                    title="Only leads with no contact (manual sourcing)"
+                    className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-medium shadow-sm transition ${
+                      noPocOnly ? "border-red-300 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                    }`}
+                  >
+                    no&nbsp;POC
+                  </button>
                 </div>
 
                 {/* Market chips — only when this day mixes US + GCC rows */}
@@ -900,14 +1084,14 @@ export default function Outbound() {
                 )}
                 <p className="px-0.5 text-[11px] text-slate-400">
                   {visible.length} of {scopedRows.length} lead{scopedRows.length === 1 ? "" : "s"}
-                  {(q || trigFilter || confFilters.length > 0 || noPocOnly || statusFilter || marketFilter) && (
+                  {(q || trigFilters.length > 0 || confFilters.length > 0 || noPocOnly || statusFilters.length > 0 || marketFilter) && (
                     <button
                       onClick={() => {
                         setQ("");
-                        setTrigFilter("");
+                        setTrigFilters([]);
                         setConfFilters([]);
                         setNoPocOnly(false);
-                        setStatusFilter("");
+                        setStatusFilters([]);
                         setMarketFilter("");
                       }}
                       className="ml-2 font-medium text-brand hover:underline"
@@ -965,6 +1149,11 @@ export default function Outbound() {
                     <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-[11px] text-slate-400">
                       {!noPoc && <span className="truncate font-medium text-slate-600">{r.company}</span>}
                       <span className="truncate">· {r.trigger_type}</span>
+                      {viewMode !== "day" && (
+                        <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
+                          {fmtDay(r.queued_date)}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );

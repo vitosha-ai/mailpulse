@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
 // GET /api/outbound — the research queue the Vitosha agent writes nightly.
-// Params: date (ISO; default = most recent queued_date), status (filter).
+// Scope params (pick one):
+//   date=YYYY-MM-DD              one day (default = most recent queued_date)
+//   from=YYYY-MM-DD&to=YYYY-MM-DD   inclusive range; either bound optional
+//   all=1                        every day
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const db = getDb();
@@ -14,40 +17,53 @@ export async function GET(request: NextRequest) {
     )
     .all() as { queued_date: string; n: number }[];
 
-  const date = sp.get("date") || dates[0]?.queued_date || null;
-  const status = sp.get("status");
+  const from = sp.get("from");
+  const to = sp.get("to");
+  const all = sp.get("all") === "1";
+  const ranged = all || !!from || !!to;
+  const date = ranged ? null : sp.get("date") || dates[0]?.queued_date || null;
 
   const where: string[] = [];
   const params: unknown[] = [];
   if (date) {
     where.push("queued_date = ?");
     params.push(date);
-  }
-  if (status) {
-    where.push("status = ?");
-    params.push(status);
+  } else if (!all) {
+    if (from) {
+      where.push("queued_date >= ?");
+      params.push(from);
+    }
+    if (to) {
+      where.push("queued_date <= ?");
+      params.push(to);
+    }
   }
 
-  const rows = date
-    ? db
-        .prepare(
-          `SELECT * FROM research_queue
-           ${where.length ? "WHERE " + where.join(" AND ") : ""}
-           ORDER BY CASE confidence WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
-                    company, id`,
-        )
-        .all(...params)
-    : [];
+  const rows =
+    date || ranged
+      ? db
+          .prepare(
+            `SELECT * FROM research_queue
+             ${where.length ? "WHERE " + where.join(" AND ") : ""}
+             ORDER BY queued_date DESC,
+                      CASE confidence WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
+                      company, id`,
+          )
+          .all(...params)
+      : [];
 
   const counts = db
     .prepare(
       `SELECT status, COUNT(*) AS n FROM research_queue
-       ${date ? "WHERE queued_date = ?" : ""} GROUP BY status`,
+       ${where.length ? "WHERE " + where.join(" AND ") : ""} GROUP BY status`,
     )
-    .all(...(date ? [date] : [])) as { status: string; n: number }[];
+    .all(...params) as { status: string; n: number }[];
 
   return NextResponse.json({
     date,
+    from: from || null,
+    to: to || null,
+    all,
     dates: dates.map((d) => d.queued_date),
     dateCounts: Object.fromEntries(dates.map((d) => [d.queued_date, d.n])),
     rows,
