@@ -202,6 +202,10 @@ export default function Outbound() {
   const [confFilters, setConfFilters] = useState<string[]>([]);
   const [noPocOnly, setNoPocOnly] = useState(false);
   const [marketFilter, setMarketFilter] = useState("");
+  // Region front door: "" shows the two agent tiles; "us"/"gcc" enters that
+  // agent's workspace. Mirrored in the URL (?market=) so it's bookmarkable.
+  const [marketScope, setMarketScope] = useState("");
+  const [scopeReady, setScopeReady] = useState(false);
   const [sortBy, setSortBy] = useState<"confidence" | "company" | "recent">("confidence");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [edits, setEdits] = useState<Record<number, Partial<Row>>>({});
@@ -234,6 +238,29 @@ export default function Outbound() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Read the region from the URL on mount and on back/forward navigation.
+  useEffect(() => {
+    const read = () => setMarketScope(new URLSearchParams(window.location.search).get("market") || "");
+    read();
+    setScopeReady(true);
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+
+  const pickMarket = useCallback((m: string) => {
+    setMarketScope(m);
+    const u = new URL(window.location.href);
+    u.searchParams.set("market", m);
+    window.history.pushState({}, "", u.toString());
+  }, []);
+
+  const exitToRegions = useCallback(() => {
+    setMarketScope("");
+    const u = new URL(window.location.href);
+    u.searchParams.delete("market");
+    window.history.pushState({}, "", u.toString());
+  }, []);
+
   useEffect(() => {
     fetch("/api/outbound/costs")
       .then((r) => r.json())
@@ -262,6 +289,7 @@ export default function Outbound() {
   const exportUrl = (scope: "view" | "day" | "all", fmt: "xlsx" | "csv") => {
     const p = new URLSearchParams();
     p.set("format", fmt);
+    if (marketScope) p.set("market", marketScope); // stay inside the entered region
     if (scope !== "all" && date) p.set("date", date);
     if (scope === "view") {
       // Apply the live filters so "current view" downloads exactly what's on screen.
@@ -280,6 +308,7 @@ export default function Outbound() {
   const rangeUrl = (fmt: "xlsx" | "csv") => {
     const p = new URLSearchParams();
     p.set("format", fmt);
+    if (marketScope) p.set("market", marketScope);
     let from = rangeFrom;
     let to = rangeTo;
     if (from && to && from > to) [from, to] = [to, from];
@@ -288,17 +317,23 @@ export default function Outbound() {
     return `/api/outbound/export?${p.toString()}`;
   };
 
-  // Trigger types present in today's batch (drives the filter dropdown).
-  const trigTypes = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.trigger_type).filter(Boolean))) as string[],
-    [rows],
+  // Everything below the region door works on the entered region's rows only.
+  const scopedRows = useMemo(
+    () => (marketScope ? rows.filter((r) => (r.market || "us") === marketScope) : rows),
+    [rows, marketScope],
   );
 
-  // Markets present in this day's rows. The US/GCC chips render only when more
-  // than one market exists, so the page is unchanged for a single-market team.
+  // Trigger types present in today's batch (drives the filter dropdown).
+  const trigTypes = useMemo(
+    () => Array.from(new Set(scopedRows.map((r) => r.trigger_type).filter(Boolean))) as string[],
+    [scopedRows],
+  );
+
+  // Markets present in the current view. Inside a region scope this is always
+  // one, so the mixed-market chips/badges only appear in unscoped edge cases.
   const markets = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.market || "us"))).sort(),
-    [rows],
+    () => Array.from(new Set(scopedRows.map((r) => r.market || "us"))).sort(),
+    [scopedRows],
   );
 
   const CONF_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
@@ -306,7 +341,7 @@ export default function Outbound() {
   // The list the rep actually sees: search + filters + sort, all instant.
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const out = rows.filter((r) => {
+    const out = scopedRows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
       if (trigFilter && r.trigger_type !== trigFilter) return false;
       if (confFilters.length && !confFilters.includes(r.confidence ?? "Low")) return false;
@@ -328,7 +363,7 @@ export default function Outbound() {
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, statusFilter, trigFilter, confFilters, noPocOnly, marketFilter, sortBy]);
+  }, [scopedRows, q, statusFilter, trigFilter, confFilters, noPocOnly, marketFilter, sortBy]);
 
   // Keep the selection inside the visible set as filters change.
   useEffect(() => {
@@ -426,6 +461,90 @@ export default function Outbound() {
   const selDirty = selected ? !!edits[selected.id] : false;
   const selConf = CONF_META[sel?.confidence ?? ""] ?? CONF_META.Low;
 
+  // ---- Region front door: two agent tiles; click one to enter its workspace.
+  if (scopeReady && !marketScope) {
+    const count = (m: string) => rows.filter((r) => (r.market || "us") === m).length;
+    const pending = (m: string) =>
+      rows.filter((r) => (r.market || "us") === m && r.status === "Pending").length;
+    const TILES = [
+      {
+        m: "us", flag: "🇺🇸", name: "US Agent",
+        desc: "United States · researched nightly at 1 PM ET",
+        accent: "hover:border-brand/50 hover:shadow-brand/10",
+      },
+      {
+        m: "gcc", flag: "🌍", name: "GCC Agent",
+        desc: "UAE · Saudi · Qatar · Kuwait · Bahrain · Oman · nightly at 7 AM GST",
+        accent: "hover:border-teal-400/60 hover:shadow-teal-500/10",
+      },
+    ];
+    return (
+      <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
+        <div className="mx-auto max-w-4xl p-6">
+          <header className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+                Outbound
+              </h1>
+              <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
+                pick a region to review its agent&apos;s leads
+              </p>
+            </div>
+            <a
+              href="/"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+            >
+              ← Dashboard
+            </a>
+          </header>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {TILES.map((t) => {
+              const n = count(t.m);
+              const p = pending(t.m);
+              return (
+                <button
+                  key={t.m}
+                  onClick={() => pickMarket(t.m)}
+                  className={`group rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:shadow-lg ${t.accent}`}
+                >
+                  <div className="text-4xl">{t.flag}</div>
+                  <h2 className="mt-3 text-xl font-bold text-slate-900">{t.name}</h2>
+                  <p className="mt-1 text-xs text-slate-500">{t.desc}</p>
+                  <div className="mt-5 flex items-center gap-2 text-sm">
+                    {n > 0 ? (
+                      <>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                          {n} lead{n === 1 ? "" : "s"} {date ? `· ${fmtDay(date)}` : ""}
+                        </span>
+                        {p > 0 && (
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-700">
+                            {p} pending review
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-400">
+                        no leads yet {t.m === "gcc" ? "· first run tonight" : ""}
+                      </span>
+                    )}
+                    <span className="ml-auto font-medium text-brand opacity-0 transition group-hover:opacity-100">
+                      open →
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mt-6 text-center text-xs text-slate-400">
+            Two independent nightly agents publish here. Each region has its own leads, filters and exports.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
       <div className="mx-auto max-w-7xl p-6">
@@ -433,17 +552,28 @@ export default function Outbound() {
           <div>
             <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Outbound
+              <span className="ml-2 align-middle text-base font-semibold text-slate-500">
+                · {marketScope === "gcc" ? "🌍 GCC Agent" : "🇺🇸 US Agent"}
+              </span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
               triggered accounts · researched &amp; drafted nightly · you verify &amp; send
             </p>
           </div>
-          <a
-            href="/"
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
-          >
-            ← Dashboard
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exitToRegions}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+            >
+              ⇄ Regions
+            </button>
+            <a
+              href="/"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+            >
+              ← Dashboard
+            </a>
+          </div>
         </header>
 
         {/* Agent spend — one compact strip; expand for the full breakdown */}
@@ -769,7 +899,7 @@ export default function Outbound() {
                   </div>
                 )}
                 <p className="px-0.5 text-[11px] text-slate-400">
-                  {visible.length} of {rows.length} lead{rows.length === 1 ? "" : "s"}
+                  {visible.length} of {scopedRows.length} lead{scopedRows.length === 1 ? "" : "s"}
                   {(q || trigFilter || confFilters.length > 0 || noPocOnly || statusFilter || marketFilter) && (
                     <button
                       onClick={() => {

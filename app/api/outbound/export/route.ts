@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
   const conf = sp.get("conf"); // comma-separated High,Medium,Low
   const q = sp.get("q");
   const nopoc = sp.get("nopoc");
+  const market = sp.get("market");
   const format = sp.get("format") === "csv" ? "csv" : "xlsx";
 
   const where: string[] = [];
@@ -70,6 +71,11 @@ export async function GET(request: NextRequest) {
     where.push("queued_date >= ?");
     params.push(from);
     scopeName = `since_${from}`;
+  }
+  if (market) {
+    where.push("COALESCE(market,'us') = ?");
+    params.push(market);
+    scopeName = `${market}-${scopeName}`;
   }
   if (status) {
     where.push("status = ?");
