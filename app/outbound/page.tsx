@@ -224,6 +224,48 @@ export default function Outbound() {
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Adjustable split: drag the divider between list and reading pane
+  // (desktop only). Width persists per browser; double-click resets.
+  const [paneW, setPaneW] = useState<number | null>(null);
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const dragInfo = useRef<{ startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem("mp_outbound_panew"));
+    if (saved >= 280 && saved <= 640) setPaneW(saved);
+  }, []);
+
+  const onDividerDown = useCallback((e: React.PointerEvent) => {
+    const el = leftColRef.current;
+    if (!el) return;
+    dragInfo.current = { startX: e.clientX, startW: el.getBoundingClientRect().width };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: PointerEvent) => {
+      if (!dragInfo.current) return;
+      const w = Math.min(640, Math.max(280, dragInfo.current.startW + (ev.clientX - dragInfo.current.startX)));
+      setPaneW(w);
+    };
+    const up = () => {
+      dragInfo.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setPaneW((w) => {
+        if (w) localStorage.setItem("mp_outbound_panew", String(w));
+        return w;
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    e.preventDefault();
+  }, []);
+
+  const resetPane = useCallback(() => {
+    setPaneW(null);
+    localStorage.removeItem("mp_outbound_panew");
+  }, []);
 
   const isoDaysAgo = (n: number) => {
     const d = new Date();
@@ -943,9 +985,12 @@ export default function Outbound() {
               : "No rows in this span. Try a wider range or jump back to Day view."}
           </div>
         ) : (
-          <div className="flex flex-col gap-4 lg:h-[calc(100vh-13rem)] lg:flex-row">
+          <div
+            className="flex flex-col gap-4 lg:h-[calc(100vh-13rem)] lg:flex-row lg:gap-0"
+            style={paneW ? ({ "--panew": `${paneW}px` } as React.CSSProperties) : undefined}
+          >
             {/* ------- Left: search + filters + lead list ------- */}
-            <div className="flex shrink-0 flex-col lg:w-[360px]">
+            <div ref={leftColRef} className="flex shrink-0 flex-col lg:w-[var(--panew,360px)]">
               <div className="mb-3 space-y-2">
                 <input
                   ref={searchRef}
@@ -1159,6 +1204,16 @@ export default function Outbound() {
                 );
               })}
               </div>
+            </div>
+
+            {/* ------- Divider: drag to resize the split, double-click to reset ------- */}
+            <div
+              onPointerDown={onDividerDown}
+              onDoubleClick={resetPane}
+              title="Drag to resize · double-click to reset"
+              className="group hidden w-4 shrink-0 cursor-col-resize items-stretch justify-center lg:flex"
+            >
+              <div className="w-1 rounded-full bg-slate-200 transition group-hover:bg-brand/50 group-active:bg-brand" />
             </div>
 
             {/* ------- Right: reading pane ------- */}
