@@ -36,6 +36,12 @@ type Row = {
 
 const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC" };
 
+// Per-lead market badge colors — GCC stands out, US stays quiet.
+const MARKET_BADGE: Record<string, string> = {
+  us: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+  gcc: "bg-teal-100 text-teal-700 ring-1 ring-teal-300",
+};
+
 const STATUSES = ["Pending", "Verified", "Edited", "Sent", "Rejected", "Skipped"] as const;
 
 const CONF_META: Record<string, { dot: string; text: string }> = {
@@ -809,6 +815,14 @@ export default function Outbound() {
                         {noPoc ? r.company : `${r.first_name} ${r.last_name ?? ""}`}
                       </span>
                       {edits[r.id] && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title="unsaved edits" />}
+                      {markets.length > 1 && (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${MARKET_BADGE[r.market || "us"] ?? MARKET_BADGE.us}`}
+                          title={`${MARKET_LABELS[r.market || "us"] ?? r.market} market lead`}
+                        >
+                          {MARKET_LABELS[r.market || "us"] ?? (r.market || "us").toUpperCase()}
+                        </span>
+                      )}
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_META[r.status] ?? ""}`}>
                         {r.status}
                       </span>
@@ -846,6 +860,13 @@ export default function Outbound() {
                           {sel.first_name ? `${sel.first_name} ${sel.last_name ?? ""}` : sel.company}
                         </h2>
                         <span className={`text-xs font-semibold ${selConf.text}`}>{sel.confidence}</span>
+                        {(markets.length > 1 || (sel.market && sel.market !== "us")) && (
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${MARKET_BADGE[sel.market || "us"] ?? MARKET_BADGE.us}`}
+                          >
+                            {MARKET_LABELS[sel.market || "us"] ?? (sel.market || "us").toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <p className="mt-0.5 text-sm text-slate-600">
                         {sel.first_name ? (
