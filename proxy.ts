@@ -16,6 +16,15 @@ async function sha256(text: string): Promise<string> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // DEV-ONLY preview bypass: when running `next dev` on the developer's own
+  // machine (localhost), skip the password gate so the UI can be exercised
+  // and screenshotted before deploys. Production builds (`next start` on
+  // Railway) never take this branch — NODE_ENV is "production" there.
+  const host = request.nextUrl.hostname;
+  if (process.env.NODE_ENV === "development" && (host === "localhost" || host === "127.0.0.1")) {
+    return NextResponse.next();
+  }
+
   // Public paths: login screen, its API, framework assets, and the
   // machine-to-machine endpoints (each protected by its own bearer token):
   // ingest (nightly agents), feedback (Excel verdict import), and learning
