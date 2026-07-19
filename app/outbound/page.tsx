@@ -34,7 +34,7 @@ type Row = {
   market: string | null;
 };
 
-const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC" };
+const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare" };
 
 // Per-lead market badge colors — GCC stands out, US stays quiet.
 const MARKET_BADGE: Record<string, string> = {
@@ -79,19 +79,25 @@ type CostAgg = {
   total_cost_usd: number;
 };
 
+type MarketAgg = { market: string; runs: number; total_cost_usd: number };
+
 type Costs = {
   today: CostAgg;
   week: CostAgg;
   month: CostAgg;
   allTime: CostAgg;
+  markets?: { today: MarketAgg[]; week: MarketAgg[]; month: MarketAgg[]; allTime: MarketAgg[] };
   daily: { run_date: string; apollo_credits: number; total_cost_usd: number; runs: number }[];
 };
+
+// Which agent spent it: us/gcc = Vitosha, healthcare = Hanover Medzone agent.
+const marketLabel = (m: string) => MARKET_LABELS[m] ?? m;
 
 const usd = (n: number) => `$${(n ?? 0).toFixed(2)}`;
 const compact = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : `${n ?? 0}`;
 
-function CostCard({ label, agg }: { label: string; agg: CostAgg }) {
+function CostCard({ label, agg, markets }: { label: string; agg: CostAgg; markets?: MarketAgg[] }) {
   return (
     <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between">
@@ -118,6 +124,16 @@ function CostCard({ label, agg }: { label: string; agg: CostAgg }) {
           </div>
         )}
       </div>
+      {markets && markets.length > 1 && (
+        <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+          {markets.map((m, i) => (
+            <span key={m.market}>
+              {i > 0 && <span className="text-slate-300"> · </span>}
+              {marketLabel(m.market)} <b className="text-slate-700">{usd(m.total_cost_usd)}</b>
+            </span>
+          ))}
+        </div>
+      )}
       <p className="mt-2 text-[11px] text-slate-400">{agg.runs} agent run{agg.runs === 1 ? "" : "s"}</p>
     </div>
   );
@@ -700,9 +716,9 @@ export default function Outbound() {
             {showSpend && (
               <div className="mt-3 space-y-3">
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <CostCard label="Today" agg={costs.today} />
-                  <CostCard label="Last 7 days" agg={costs.week} />
-                  <CostCard label="Last 30 days" agg={costs.month} />
+                  <CostCard label="Today" agg={costs.today} markets={costs.markets?.today} />
+                  <CostCard label="Last 7 days" agg={costs.week} markets={costs.markets?.week} />
+                  <CostCard label="Last 30 days" agg={costs.month} markets={costs.markets?.month} />
                 </div>
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <table className="w-full text-xs">

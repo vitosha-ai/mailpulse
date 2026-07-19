@@ -37,6 +37,25 @@ function aggregate(sinceIso: string | null): Agg {
   return row;
 }
 
+// Per-agent (market) breakdown of a window: us = Vitosha US, gcc = Vitosha GCC,
+// healthcare = Hanover Medzone healthcare agent. Rendered as a split line on
+// the cost cards whenever more than one agent spent in the window.
+type MarketAgg = { market: string; runs: number; total_cost_usd: number };
+
+function marketSplit(sinceIso: string | null): MarketAgg[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT COALESCE(NULLIF(market, ''), 'us') AS market,
+              COUNT(*) AS runs,
+              COALESCE(SUM(total_cost_usd), 0) AS total_cost_usd
+       FROM agent_usage ${sinceIso ? "WHERE run_date >= ?" : ""}
+       GROUP BY 1
+       ORDER BY total_cost_usd DESC`,
+    )
+    .all(...(sinceIso ? [sinceIso] : [])) as MarketAgg[];
+}
+
 function daysAgo(n: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - n);
@@ -67,6 +86,12 @@ export async function GET() {
     week: aggregate(daysAgo(6)),   // rolling 7 days incl. today
     month: aggregate(daysAgo(29)), // rolling 30 days incl. today
     allTime: aggregate(null),
+    markets: {
+      today: marketSplit(today),
+      week: marketSplit(daysAgo(6)),
+      month: marketSplit(daysAgo(29)),
+      allTime: marketSplit(null),
+    },
     daily,
   });
 }
