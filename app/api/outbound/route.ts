@@ -9,13 +9,20 @@ import { getDb } from "@/lib/db";
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const db = getDb();
+  // Region scope: when the UI is inside a region workspace, EVERYTHING this
+  // endpoint returns (rows, day counts, status counts) is scoped to it — so
+  // the day navigator never advertises another region's leads.
+  const market = sp.get("market");
+  const mWhere = market ? "COALESCE(NULLIF(market,''),'us') = ?" : "";
 
   // Every day that has leads, with its lead count (drives the day navigator).
   const dates = db
     .prepare(
-      "SELECT queued_date, COUNT(*) AS n FROM research_queue GROUP BY queued_date ORDER BY queued_date DESC",
+      `SELECT queued_date, COUNT(*) AS n FROM research_queue
+       ${market ? "WHERE " + mWhere : ""}
+       GROUP BY queued_date ORDER BY queued_date DESC`,
     )
-    .all() as { queued_date: string; n: number }[];
+    .all(...(market ? [market] : [])) as { queued_date: string; n: number }[];
 
   const from = sp.get("from");
   const to = sp.get("to");
@@ -25,6 +32,10 @@ export async function GET(request: NextRequest) {
 
   const where: string[] = [];
   const params: unknown[] = [];
+  if (market) {
+    where.push(mWhere);
+    params.push(market);
+  }
   if (date) {
     where.push("queued_date = ?");
     params.push(date);

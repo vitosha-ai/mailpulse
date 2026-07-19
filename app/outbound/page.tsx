@@ -294,9 +294,16 @@ export default function Outbound() {
   };
 
   const load = useCallback(
-    async (opts?: { date?: string | null; mode?: typeof viewMode; from?: string; to?: string }) => {
+    async (opts?: {
+      date?: string | null;
+      mode?: typeof viewMode;
+      from?: string;
+      to?: string;
+      market?: string;
+    }) => {
       const mode = opts?.mode ?? "day";
       const params = new URLSearchParams();
+      if (opts?.market) params.set("market", opts.market); // region-scoped view
       if (mode === "day") {
         if (opts?.date) params.set("date", opts.date);
       } else if (mode === "7d") params.set("from", isoDaysAgo(6));
@@ -330,10 +337,20 @@ export default function Outbound() {
       setViewFrom(from);
       setViewTo(to);
       setShowRangeMenu(false);
-      load(mode === "day" ? { date, mode } : { mode, from, to });
+      const market = marketScope || undefined;
+      load(mode === "day" ? { date, mode, market } : { mode, from, to, market });
     },
-    [date, load],
+    [date, load, marketScope],
   );
+
+  // Entering/leaving a region refetches with that region's scope, so the day
+  // navigator, counts and rows all describe THIS region only. Leaving (back
+  // to the tiles) refetches unscoped so both tiles show true counts.
+  useEffect(() => {
+    if (!scopeReady) return;
+    load({ date, mode: "day", market: marketScope || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketScope, scopeReady]);
 
   useEffect(() => {
     load();
@@ -384,7 +401,17 @@ export default function Outbound() {
   const setField = (id: number, key: keyof Row, value: string) =>
     setEdits((e) => ({ ...e, [id]: { ...e[id], [key]: value } }));
 
-  const selected = useMemo(() => rows.find((r) => r.id === selectedId) ?? null, [rows, selectedId]);
+  // Everything below the region door works on the entered region's rows only
+  // (the fetch is already region-scoped; this is belt-and-suspenders).
+  const scopedRows = useMemo(
+    () => (marketScope ? rows.filter((r) => (r.market || "us") === marketScope) : rows),
+    [rows, marketScope],
+  );
+
+  const selected = useMemo(
+    () => scopedRows.find((r) => r.id === selectedId) ?? null,
+    [scopedRows, selectedId],
+  );
 
   // Prev/next day navigation. `dates` is newest-first, so "older" = higher index.
   const dateIdx = date ? dates.indexOf(date) : -1;
@@ -394,7 +421,7 @@ export default function Outbound() {
     if (!d) return;
     setDate(d);
     setViewMode("day");
-    load({ date: d, mode: "day" });
+    load({ date: d, mode: "day", market: marketScope || undefined });
   };
 
   // The current span, as export/query params (mirrors what's on screen).
@@ -441,12 +468,6 @@ export default function Outbound() {
     return `/api/outbound/export?${p.toString()}`;
   };
 
-  // Everything below the region door works on the entered region's rows only.
-  const scopedRows = useMemo(
-    () => (marketScope ? rows.filter((r) => (r.market || "us") === marketScope) : rows),
-    [rows, marketScope],
-  );
-
   // Trigger types present in today's batch (drives the filter dropdown).
   const trigTypes = useMemo(
     () => Array.from(new Set(scopedRows.map((r) => r.trigger_type).filter(Boolean))) as string[],
@@ -489,10 +510,13 @@ export default function Outbound() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopedRows, q, statusFilters, trigFilters, confFilters, noPocOnly, marketFilter, sortBy]);
 
-  // Keep the selection inside the visible set as filters change.
+  // Keep the selection inside the visible set as filters change — and CLEAR
+  // it when nothing is visible (never show another region's lead in the pane).
   useEffect(() => {
-    if (visible.length && !visible.some((r) => r.id === selectedId)) {
-      setSelectedId(visible[0].id);
+    if (visible.length) {
+      if (!visible.some((r) => r.id === selectedId)) setSelectedId(visible[0].id);
+    } else if (selectedId !== null) {
+      setSelectedId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -676,8 +700,10 @@ export default function Outbound() {
           <div>
             <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Outbound
+              {/* Plain text, no flag emoji — Windows renders 🇺🇸 as the letters
+                  "US", which doubled the label ("us US Agent"). */}
               <span className="ml-2 align-middle text-base font-semibold text-slate-500">
-                · {marketScope === "gcc" ? "🌍 GCC Agent" : "🇺🇸 US Agent"}
+                · {(MARKET_LABELS[marketScope] ?? marketScope.toUpperCase())} Agent
               </span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
