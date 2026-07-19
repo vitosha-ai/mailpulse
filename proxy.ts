@@ -16,12 +16,17 @@ async function sha256(text: string): Promise<string> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public paths: login screen, its API, framework assets, and the outbound
-  // ingest endpoint (machine-to-machine; protected by its own bearer token).
+  // Public paths: login screen, its API, framework assets, and the
+  // machine-to-machine endpoints (each protected by its own bearer token):
+  // ingest (nightly agents), feedback (Excel verdict import), and learning
+  // POST (learned-lesson entries). The learning GET (the team's feed) stays
+  // behind the password gate.
   if (
     pathname === "/login" ||
     pathname === "/api/login" ||
     pathname === "/api/outbound/ingest" ||
+    pathname === "/api/outbound/feedback" ||
+    (pathname === "/api/outbound/learning" && request.method === "POST") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {

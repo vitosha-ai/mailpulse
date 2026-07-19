@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     queued_date?: string;
     rows?: Row[];
     usage?: UsageRecord | null;
+    digest?: string | null; // optional plain-English run summary → learning log
   };
   const queuedDate = body.queued_date || new Date().toISOString().slice(0, 10);
   const rows = Array.isArray(body.rows) ? body.rows : [];
@@ -77,5 +78,21 @@ export async function POST(request: NextRequest) {
     usageRecorded = true;
   }
 
-  return NextResponse.json({ ok: true, received: rows.length, inserted, usageRecorded });
+  // Optional nightly digest → one kind='auto' learning-log entry. Market rides
+  // on the usage record (or the first row) so US/GCC feeds stay separate.
+  let digestRecorded = false;
+  if (typeof body.digest === "string" && body.digest.trim()) {
+    const market =
+      (body.usage && typeof (body.usage as Record<string, unknown>).market === "string"
+        ? String((body.usage as Record<string, unknown>).market)
+        : "") ||
+      rows[0]?.market ||
+      "us";
+    db.prepare(
+      "INSERT INTO learning_log (date, market, kind, entry) VALUES (?, ?, 'auto', ?)",
+    ).run(queuedDate, market, body.digest.trim().slice(0, 2000));
+    digestRecorded = true;
+  }
+
+  return NextResponse.json({ ok: true, received: rows.length, inserted, usageRecorded, digestRecorded });
 }

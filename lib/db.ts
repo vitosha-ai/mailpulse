@@ -223,6 +223,19 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_usage_date ON agent_usage(run_date DESC);
+
+    -- Learning log: a readable feed of what each agent did (kind='auto',
+    -- one digest per nightly run) and what it has learned (kind='learned',
+    -- written only when the user approves an improvement in a review).
+    CREATE TABLE IF NOT EXISTS learning_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      market TEXT NOT NULL DEFAULT 'us',
+      kind TEXT NOT NULL DEFAULT 'auto',
+      entry TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_learning_date ON learning_log(date DESC);
   `);
 
   // Additive migrations for databases created before these columns existed.

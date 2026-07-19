@@ -236,6 +236,10 @@ export default function Outbound() {
   const [copied, setCopied] = useState<number | null>(null);
   const [costs, setCosts] = useState<Costs | null>(null);
   const [showSpend, setShowSpend] = useState(false);
+  const [learning, setLearning] = useState<
+    { id: number; date: string; market: string; kind: string; entry: string }[]
+  >([]);
+  const [showLearning, setShowLearning] = useState(false);
   const [showTrail, setShowTrail] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -365,6 +369,15 @@ export default function Outbound() {
       .then(setCosts)
       .catch(() => setCosts(null));
   }, []);
+
+  // Learning-log feed, scoped to the entered region (US and GCC see their own).
+  useEffect(() => {
+    if (!marketScope) return;
+    fetch(`/api/outbound/learning?market=${marketScope}`)
+      .then((r) => r.json())
+      .then((d) => setLearning(d.entries ?? []))
+      .catch(() => setLearning([]));
+  }, [marketScope]);
 
   const merged = useCallback((r: Row): Row => ({ ...r, ...edits[r.id] }), [edits]);
 
@@ -753,6 +766,49 @@ export default function Outbound() {
                     $ figures are estimates from metered credits/tokens at plan rates.
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Learning log — what this region's agent did each night and what it
+            has learned from reviews. Collapsed to one line until opened. */}
+        {learning.length > 0 && (
+          <div className="mb-4">
+            <button
+              onClick={() => setShowLearning((v) => !v)}
+              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:border-slate-300"
+            >
+              <span className="flex min-w-0 items-center gap-3 text-xs text-slate-600">
+                <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  Learning log
+                </span>
+                <span className="truncate text-slate-500">
+                  {learning[0].date} · {learning[0].entry.slice(0, 90)}
+                  {learning[0].entry.length > 90 ? "…" : ""}
+                </span>
+              </span>
+              <span className="ml-3 shrink-0 text-[11px] font-medium text-brand">
+                {showLearning ? "collapse ▴" : `${learning.length} entries ▾`}
+              </span>
+            </button>
+            {showLearning && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                {learning.map((e) => (
+                  <div key={e.id} className="flex gap-3 border-b border-slate-50 px-4 py-2.5 text-xs last:border-0">
+                    <span className="w-[74px] shrink-0 font-mono text-[10px] text-slate-400">{e.date}</span>
+                    <span
+                      className={`h-fit shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                        e.kind === "learned"
+                          ? "bg-violet-100 text-violet-700 ring-1 ring-violet-300"
+                          : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+                      }`}
+                    >
+                      {e.kind}
+                    </span>
+                    <span className="min-w-0 whitespace-pre-wrap text-slate-700">{e.entry}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
