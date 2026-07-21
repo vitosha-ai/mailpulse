@@ -267,6 +267,13 @@ function migrate(db: Database.Database) {
     "ALTER TABLE agent_usage ADD COLUMN brightdata_cost_usd REAL DEFAULT 0",
     "ALTER TABLE research_queue ADD COLUMN market TEXT DEFAULT 'us'",
     "ALTER TABLE agent_usage ADD COLUMN market TEXT DEFAULT 'us'",
+    // Lead tracker (team workflow): who owns it, when contacted, what came back,
+    // and when the row last changed. updated_at is stamped by every PATCH and
+    // feedback import.
+    "ALTER TABLE research_queue ADD COLUMN sdr TEXT",
+    "ALTER TABLE research_queue ADD COLUMN contacted_at TEXT",
+    "ALTER TABLE research_queue ADD COLUMN response TEXT",
+    "ALTER TABLE research_queue ADD COLUMN updated_at TEXT",
   ];
   for (const stmt of addColumns) {
     try {

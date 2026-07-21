@@ -58,6 +58,11 @@ async function readFileVerdicts(file) {
       trigger_detail: txt(r.getCell(col("Trigger Detail")).value),
       status,
       rep_notes: col("Rep Notes") ? txt(r.getCell(col("Rep Notes")).value) : "",
+      // Lead-tracker columns — present in exports since Jul 2026; older or
+      // trimmed rep copies simply won't have them.
+      sdr: col("SDR") ? txt(r.getCell(col("SDR")).value) : "",
+      contacted_at: col("Contacted On") ? iso(r.getCell(col("Contacted On")).value) : "",
+      response: col("Response") ? txt(r.getCell(col("Response")).value) : "",
       source: path.basename(file, path.extname(file)),
     });
   }
@@ -104,10 +109,14 @@ async function main() {
     if (distinct.length > 1) {
       fileConflicts.push(group);
     } else if (verdicts.length) {
-      // Same verdict from 1+ reps → merge their notes into one submission.
+      // Same verdict from 1+ reps → merge their notes; first non-empty wins
+      // for the tracker fields.
       const w = { ...verdicts[0] };
       const notes = [...new Set(verdicts.map((v) => v.rep_notes).filter(Boolean))];
       w.rep_notes = notes.join(" | ");
+      w.sdr = verdicts.map((v) => v.sdr).find(Boolean) || "";
+      w.contacted_at = verdicts.map((v) => v.contacted_at).find(Boolean) || "";
+      w.response = verdicts.map((v) => v.response).find(Boolean) || "";
       winners.push(w);
     }
   }

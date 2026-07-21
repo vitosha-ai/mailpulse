@@ -82,7 +82,8 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// PATCH /api/outbound — update one row's status and/or edited draft fields.
+// PATCH /api/outbound — update one row's status, edited draft fields, and/or
+// lead-tracker fields (SDR owner, contacted date, response).
 const EDITABLE = new Set([
   "status",
   "subject",
@@ -91,6 +92,9 @@ const EDITABLE = new Set([
   "followup_day_8",
   "breakup_day_15",
   "rep_notes",
+  "sdr",
+  "contacted_at",
+  "response",
 ]);
 
 export async function PATCH(request: NextRequest) {
@@ -112,6 +116,7 @@ export async function PATCH(request: NextRequest) {
   if (!cols.length) {
     return NextResponse.json({ error: "no editable fields" }, { status: 400 });
   }
+  cols.push("updated_at = datetime('now')"); // tracker: stamp every edit
   vals.push(id);
 
   getDb()
