@@ -43,3 +43,4 @@ next-env.d.ts
 # local database (contains API keys + sender data)
 data/
 /feedback/
+dev-server.log
