@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CallActivityWidget from "./CallActivityWidget";
 
 type Row = {
   id: number;
@@ -692,6 +693,9 @@ export default function Outbound() {
               );
             })}
           </div>
+
+          {/* Cold-call scoreboard — pushed nightly by the Zoom Phone EOD job */}
+          <CallActivityWidget />
 
           <p className="mt-6 text-center text-xs text-slate-400">
             Two independent nightly agents publish here. Each region has its own leads, filters and exports.

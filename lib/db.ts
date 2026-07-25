@@ -236,6 +236,28 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_learning_date ON learning_log(date DESC);
+
+    -- Cold-call activity: one row per rep per calling day, pushed nightly by the
+    -- Zoom Phone EOD job (a separate Railway service) via /api/outbound/calls.
+    -- The Outbound landing page renders these as a per-rep scoreboard.
+    CREATE TABLE IF NOT EXISTS call_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_date TEXT NOT NULL,            -- ISO calling day, in the reps' timezone
+      email TEXT NOT NULL,                  -- rep's Zoom login email (lowercased)
+      name TEXT,                            -- display name
+      calls INTEGER DEFAULT 0,
+      outbound INTEGER DEFAULT 0,
+      inbound INTEGER DEFAULT 0,
+      connected INTEGER DEFAULT 0,
+      connect_rate INTEGER DEFAULT 0,       -- percent, 0-100
+      talk_seconds INTEGER DEFAULT 0,
+      avg_seconds INTEGER DEFAULT 0,        -- avg per connected call
+      conversations INTEGER DEFAULT 0,      -- connected calls >= threshold (2min)
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(report_date, email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_call_activity_date ON call_activity(report_date DESC);
   `);
 
   // Additive migrations for databases created before these columns existed.

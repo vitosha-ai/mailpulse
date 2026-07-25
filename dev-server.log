@@ -1,0 +1,11 @@
+
+> mailpulse@0.1.0 dev
+> next dev -p 3050
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3050
+- Network:       http://172.20.10.4:3050
+- Environments: .env.local
+✓ Ready in 1533ms
+[auto-sync] scheduled every 4h
+
