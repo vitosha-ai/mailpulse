@@ -14,6 +14,11 @@ const KEYS = [
   "imap_pass",
   "google_sa_json",
   "google_domains",
+  "serper_api_key",
+  "seo_site_url",
+  "seo_keywords",
+  "seo_competitors",
+  "seo_gsc_site",
 ] as const;
 
 function mask(v: string | null): string | null {
@@ -22,7 +27,10 @@ function mask(v: string | null): string | null {
 }
 
 // Host/port/user aren't secrets — show them in full so they're easy to verify.
-const PLAIN = new Set(["imap_host", "imap_port", "imap_user", "google_domains"]);
+const PLAIN = new Set([
+  "imap_host", "imap_port", "imap_user", "google_domains",
+  "seo_site_url", "seo_keywords", "seo_competitors", "seo_gsc_site",
+]);
 
 export async function GET() {
   const out: Record<string, string | null> = {};

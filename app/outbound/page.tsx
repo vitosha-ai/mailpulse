@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
+import SeoWidget from "./SeoWidget";
 
 type Row = {
   id: number;
@@ -696,6 +697,9 @@ export default function Outbound() {
 
           {/* Cold-call scoreboard — pushed nightly by the Zoom Phone EOD job */}
           <CallActivityWidget />
+
+          {/* SEO watchdog — rankings, competitor pages, Search Console */}
+          <SeoWidget />
 
           <p className="mt-6 text-center text-xs text-slate-400">
             Two independent nightly agents publish here. Each region has its own leads, filters and exports.

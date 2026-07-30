@@ -29,6 +29,11 @@ const FIELDS = [
     help: "Sign up free at spamhaus.com → Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",
   },
   {
+    key: "serper_api_key",
+    label: "Serper.dev API key (SEO watchdog)",
+    help: "serper.dev → Dashboard → API key. Used weekly to check where the company site and competitors rank on Google for the tracked keywords. Free tier (2,500 searches) lasts months at our volume.",
+  },
+  {
     key: "maildoso_api_key",
     label: "Maildoso API key (for the Inbox)",
     help: "Maildoso → Settings → API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies — warmup mail is filtered out. Easiest option; no IMAP details needed.",
@@ -155,6 +160,47 @@ export default function Settings() {
               className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
             >
               {saved === "google_domains" || saved === "google_sa_json" ? "Saved ✓" : "Save"}
+            </button>
+          </div>
+        </div>
+
+        {/* SEO watchdog targets — plain-text config, editable any time */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <label className="text-sm font-semibold text-slate-900">SEO watchdog — what to track</label>
+          <p className="mb-3 mt-1 text-xs leading-relaxed text-slate-500">
+            The company website being tracked, the Google searches that matter (one per line), and competitor
+            websites to watch (one domain per line). The widget lives on the Outbound page.
+          </p>
+          <input
+            value={values.seo_site_url ?? masked.seo_site_url ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, seo_site_url: e.target.value }))}
+            placeholder="company website, e.g. vitoshainc.com"
+            className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
+          />
+          <textarea
+            value={values.seo_keywords ?? masked.seo_keywords ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, seo_keywords: e.target.value }))}
+            placeholder={"keywords to track, one per line\ne.g. Microsoft Fabric consulting"}
+            rows={5}
+            className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
+          />
+          <textarea
+            value={values.seo_competitors ?? masked.seo_competitors ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, seo_competitors: e.target.value }))}
+            placeholder={"competitor websites, one per line\ne.g. rivalpartner.com"}
+            rows={3}
+            className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
+          />
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                for (const k of ["seo_site_url", "seo_keywords", "seo_competitors"]) {
+                  if (values[k] !== undefined) await save(k);
+                }
+              }}
+              className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
+            >
+              {["seo_site_url", "seo_keywords", "seo_competitors"].includes(saved ?? "") ? "Saved ✓" : "Save SEO targets"}
             </button>
           </div>
         </div>

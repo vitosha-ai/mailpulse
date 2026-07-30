@@ -258,6 +258,38 @@ function migrate(db: Database.Database) {
       UNIQUE(report_date, email)
     );
     CREATE INDEX IF NOT EXISTS idx_call_activity_date ON call_activity(report_date DESC);
+
+    -- SEO watchdog (lib/seo.ts): rankings for the company site + competitors,
+    -- one row per (keyword, domain, check date). position NULL = not in top 100.
+    CREATE TABLE IF NOT EXISTS seo_rank_history (
+      keyword TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      date TEXT NOT NULL,
+      position INTEGER,
+      url TEXT,
+      PRIMARY KEY (keyword, domain, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_seo_rank_date ON seo_rank_history(date DESC);
+
+    -- Every URL ever seen in a competitor's sitemap; rows appearing after the
+    -- initial baseline crawl are "new pages" in the widget.
+    CREATE TABLE IF NOT EXISTS seo_competitor_pages (
+      url TEXT PRIMARY KEY,
+      domain TEXT NOT NULL,
+      first_seen TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_seo_pages_seen ON seo_competitor_pages(first_seen DESC);
+
+    -- Google Search Console daily totals for the company site; the newest row
+    -- also carries the window's top queries as JSON.
+    CREATE TABLE IF NOT EXISTS seo_gsc_daily (
+      date TEXT PRIMARY KEY,
+      clicks INTEGER,
+      impressions INTEGER,
+      ctr REAL,
+      position REAL,
+      top_queries TEXT
+    );
   `);
 
   // Additive migrations for databases created before these columns existed.
