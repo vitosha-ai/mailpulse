@@ -205,7 +205,18 @@ export default function SeoWidget() {
       </div>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+          <span aria-hidden>🔍</span> SEO watchdog
+        </h2>
+        <p className="mt-2 text-xs text-red-600">
+          Couldn&apos;t load SEO data (/api/seo failed) — check the server logs, then refresh.
+        </p>
+      </div>
+    );
+  }
 
   const { config } = data;
   const configured = config.serper && config.site && config.keywords.length > 0;
