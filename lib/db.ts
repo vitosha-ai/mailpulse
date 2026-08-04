@@ -237,6 +237,31 @@ function migrate(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_learning_date ON learning_log(date DESC);
 
+    -- Reply intelligence: every campaign reply, classified (OOO miner). The
+    -- miner (mailbox-allocator/ooo_miner.py) pulls reply bodies from Smartlead,
+    -- classifies them with Claude, extracts the gold hidden in OOO auto-replies
+    -- (alternate contact + return date), and posts rows here via
+    -- /api/replies/ingest. Idempotent on (lead_email, replied_at).
+    CREATE TABLE IF NOT EXISTS reply_intel (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      replied_at TEXT NOT NULL,             -- ISO timestamp of the reply
+      campaign_name TEXT,
+      lead_email TEXT NOT NULL,
+      lead_name TEXT,
+      company TEXT,
+      category TEXT NOT NULL,               -- positive|question|referral|negative|unsubscribe|auto_reply|other
+      return_date TEXT,                     -- from OOO body, ISO date if stated
+      alt_contact_name TEXT,                -- from OOO body ("contact Sarah ...")
+      alt_contact_email TEXT,
+      summary TEXT,                         -- one-line gist of the reply
+      snippet TEXT,                         -- first ~300 chars of the reply body
+      status TEXT NOT NULL DEFAULT 'New',   -- New | Worked | Ignored
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (lead_email, replied_at)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reply_intel_cat ON reply_intel(category, status);
+    CREATE INDEX IF NOT EXISTS idx_reply_intel_date ON reply_intel(replied_at DESC);
+
     -- Cold-call activity: one row per rep per calling day, pushed nightly by the
     -- Zoom Phone EOD job (a separate Railway service) via /api/outbound/calls.
     -- The Outbound landing page renders these as a per-rep scoreboard.

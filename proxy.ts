@@ -37,6 +37,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/outbound/feedback" ||
     (pathname === "/api/outbound/calls" && request.method === "POST") ||
     (pathname === "/api/outbound/learning" && request.method === "POST") ||
+    (pathname === "/api/replies/ingest" && request.method === "POST") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {
