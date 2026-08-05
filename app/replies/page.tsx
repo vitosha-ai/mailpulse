@@ -82,6 +82,26 @@ export default function RepliesPage() {
     return c;
   }, [rows]);
 
+  // CSV export — rep-ready column order, Excel-friendly (quoted, CRLF, BOM).
+  const exportCsv = useCallback(() => {
+    const cols = [
+      "category", "lead_name", "lead_email", "company", "summary",
+      "alt_contact_name", "alt_contact_email", "return_date",
+      "campaign_name", "replied_at", "status",
+    ] as const;
+    const esc = (v: string | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [
+      cols.join(","),
+      ...rows.map((r) => cols.map((c) => esc(r[c] as string | null)).join(",")),
+    ];
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `reply-intel-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [rows]);
+
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
       <div className="mx-auto max-w-[1500px] p-6">
@@ -101,8 +121,43 @@ export default function RepliesPage() {
             <button onClick={load} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
               Refresh
             </button>
+            <button onClick={exportCsv} disabled={!rows.length}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:opacity-40">
+              ⬇ Export CSV ({rows.length})
+            </button>
           </div>
         </header>
+
+        {/* What is this + how to use it */}
+        <details className="mb-5 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+          <summary className="cursor-pointer font-semibold text-slate-700">
+            ℹ️ What is this data &amp; how to use it
+          </summary>
+          <div className="mt-3 space-y-2 text-slate-600">
+            <p>
+              Every reply our campaigns receive is pulled from Smartlead and <strong>classified by AI</strong> —
+              including the out-of-office auto-replies most teams delete. OOO bodies are mined for two things
+              people freely give away: <strong>who covers for them</strong> (an alternate contact at an
+              already-qualified company) and <strong>when they&apos;re back</strong> (the perfect day for a fresh follow-up).
+            </p>
+            <p className="font-medium text-slate-700">How to work this page, top to bottom:</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li><strong>🎯 Work these now</strong> — real human engagement: interested replies, questions, and
+                referrals (&quot;talk to X instead&quot;). These are the warmest items outbound produces — contact the
+                named person <em>today</em>, then hit <em>Mark worked</em>.</li>
+              <li><strong>⛏️ OOO gold</strong> — sorted by return date. Two plays: email the <em>alternate contact</em> now
+                (&quot;X suggested I reach out while they&apos;re away&quot;), and/or diarize a fresh touch for the
+                <em> return date</em> — you&apos;ll land top-of-inbox on their first day back.</li>
+              <li><strong>Unsubscribes</strong> (in All replies, red) — forward for suppression. Never contacted again.</li>
+              <li><strong>Statuses</strong> — <em>New</em> = untouched · <em>Worked</em> = actioned · <em>Ignored</em> = nothing useful.
+                Keeping these current is what makes the top two sections a clean to-do list.</li>
+            </ul>
+            <p className="text-xs text-slate-400">
+              Export CSV downloads the full classified list (rep-ready columns) for offline working — same data,
+              same order. Data refreshes when the reply miner runs; ask for a fresh mine anytime.
+            </p>
+          </div>
+        </details>
 
         {loading ? (
           <p className="py-16 text-center text-slate-400">Loading…</p>
