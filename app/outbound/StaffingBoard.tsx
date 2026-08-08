@@ -61,6 +61,17 @@ const reasons = (r: Row) => (r.fit_reason || "").replace(/^⚠[^·]*·\s*/, "");
 const scoreTone = (s: number) =>
   s >= 85 ? "bg-red-100 text-red-700" : s >= 65 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
 
+// Default column widths (px): Score, Role, Tech, Company, Days, Contract, Budget, Contact, Status.
+const COL_DEFAULTS = [70, 240, 120, 200, 90, 80, 130, 190, 110];
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <span onMouseDown={onMouseDown} onClick={(e) => e.stopPropagation()}
+      className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-violet-300/70"
+      title="Drag to resize column" />
+  );
+}
+
 export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [dates, setDates] = useState<string[]>([]);
@@ -73,6 +84,38 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [open, setOpen] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<"score" | "days">("score");
   const [sortDesc, setSortDesc] = useState(true);
+  // Resizable columns: widths in px, drag the right edge of any header.
+  // Persisted per browser so each SDR keeps their own layout.
+  const [colW, setColW] = useState<number[]>(COL_DEFAULTS);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("staffing-col-widths") || "null");
+      if (Array.isArray(saved) && saved.length === COL_DEFAULTS.length) setColW(saved);
+    } catch { /* corrupt storage — keep defaults */ }
+  }, []);
+  const startResize = (i: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colW[i];
+    const onMove = (ev: MouseEvent) => {
+      setColW((w) => {
+        const n = [...w];
+        n[i] = Math.max(60, startW + (ev.clientX - startX));
+        return n;
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setColW((w) => {
+        try { localStorage.setItem("staffing-col-widths", JSON.stringify(w)); } catch {}
+        return w;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<number | null>(null);
 
@@ -208,24 +251,31 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table className="w-full text-sm" style={{ tableLayout: "fixed", minWidth: colW.reduce((a, b) => a + b, 0) }}>
+            <colgroup>
+              {colW.map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="cursor-pointer select-none px-3 py-2.5 text-violet-700 hover:text-violet-900"
-                  onClick={() => toggleSort("score")} title="Sort by score">
-                  Score{arrow("score")}
-                </th>
-                <th className="px-3 py-2.5">Open role</th>
-                <th className="px-3 py-2.5">Tech</th>
-                <th className="px-3 py-2.5">Company</th>
-                <th className="cursor-pointer select-none px-3 py-2.5 text-right text-violet-700 hover:text-violet-900"
-                  onClick={() => toggleSort("days")} title="Sort by days open">
-                  Days open{arrow("days")}
-                </th>
-                <th className="px-3 py-2.5">Contract</th>
-                <th className="px-3 py-2.5">Budget</th>
-                <th className="px-3 py-2.5">Contact</th>
-                <th className="px-3 py-2.5">Status</th>
+                {[
+                  { label: <>Score{arrow("score")}</>, sort: "score" as const, right: false },
+                  { label: <>Open role</> },
+                  { label: <>Tech</> },
+                  { label: <>Company</> },
+                  { label: <>Days open{arrow("days")}</>, sort: "days" as const, right: true },
+                  { label: <>Contract</> },
+                  { label: <>Budget</> },
+                  { label: <>Contact</> },
+                  { label: <>Status</> },
+                ].map((h, i) => (
+                  <th key={i}
+                    onClick={h.sort ? () => toggleSort(h.sort) : undefined}
+                    title={h.sort ? "Click to sort · drag edge to resize" : "Drag edge to resize"}
+                    className={`relative select-none px-3 py-2.5 ${h.right ? "text-right" : ""} ${h.sort ? "cursor-pointer text-violet-700 hover:text-violet-900" : ""}`}>
+                    {h.label}
+                    <ResizeHandle onMouseDown={(e) => startResize(i, e)} />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
