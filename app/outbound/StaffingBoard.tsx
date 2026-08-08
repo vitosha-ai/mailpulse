@@ -72,8 +72,83 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
   );
 }
 
+// ---- Manager overview (computed over ALL days, not just the selected one) ---
+
+function ManagerStrip({ all, onPickTech }: { all: Row[]; onPickTech: (t: string) => void }) {
+  const pending = all.filter((r) => r.status === "Pending");
+  const meetings = all.filter((r) => r.status === "Meeting");
+  const worked = all.filter((r) => r.status !== "Pending");
+  const hotUntouched = pending.filter((r) => score(r) >= 85);
+  const collisions = all.filter(collision);
+  const contractReady = pending.filter(contractOk);
+  // Untouched leads older than 2 days are rotting — pain doesn't wait.
+  const today = new Date().toISOString().slice(0, 10);
+  const rotting = pending.filter((r) => {
+    const age = (new Date(today).getTime() - new Date(r.queued_date).getTime()) / 86400_000;
+    return age >= 2;
+  });
+
+  const KPIS: { label: string; value: number; tone: string; sub?: string }[] = [
+    { label: "Untouched leads", value: pending.length, tone: "text-slate-900" },
+    { label: "Hot & untouched (85+)", value: hotUntouched.length, tone: hotUntouched.length ? "text-red-600" : "text-slate-400", sub: "call these first" },
+    { label: "Contract-ready waiting", value: contractReady.length, tone: contractReady.length ? "text-emerald-600" : "text-slate-400" },
+    { label: "Rotting (2+ days idle)", value: rotting.length, tone: rotting.length ? "text-amber-600" : "text-slate-400", sub: "pain doesn't wait" },
+    { label: "Meetings booked", value: meetings.length, tone: meetings.length ? "text-emerald-600" : "text-slate-400" },
+    { label: "⚠ B2B collisions", value: collisions.length, tone: collisions.length ? "text-amber-600" : "text-slate-400" },
+  ];
+
+  // Per-vein: total vs worked vs meetings — which tech is producing.
+  const byVein = new Map<string, { total: number; worked: number; meetings: number }>();
+  for (const r of all) {
+    const k = r.detected_stack || "?";
+    const v = byVein.get(k) ?? { total: 0, worked: 0, meetings: 0 };
+    v.total++;
+    if (r.status !== "Pending") v.worked++;
+    if (r.status === "Meeting") v.meetings++;
+    byVein.set(k, v);
+  }
+  const veins = [...byVein.entries()].sort((a, b) => b[1].total - a[1].total);
+  const maxV = veins[0]?.[1].total || 1;
+
+  return (
+    <div className="mb-4 grid gap-3 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {KPIS.map((k) => (
+          <div key={k.label} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className={`text-xl font-bold leading-tight ${k.tone}`}>{k.value}</p>
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-500">{k.label}</p>
+            {k.sub ? <p className="text-[10px] text-slate-400">{k.sub}</p> : null}
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-500">
+          By tech · total / worked / <span className="text-emerald-600">meetings</span> — click to filter
+        </p>
+        <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+          {veins.map(([k, v]) => (
+            <button key={k} onClick={() => onPickTech(k)}
+              className="group flex w-full items-center gap-2 text-left" title={`Filter table to ${k}`}>
+              <span className="w-28 truncate text-[11px] font-medium text-slate-700 group-hover:text-violet-700">{k}</span>
+              <span className="relative h-3 flex-1 overflow-hidden rounded bg-slate-100">
+                <span className="absolute inset-y-0 left-0 rounded bg-violet-200" style={{ width: `${(v.total / maxV) * 100}%` }} />
+                <span className="absolute inset-y-0 left-0 rounded bg-violet-400" style={{ width: `${(v.worked / maxV) * 100}%` }} />
+                <span className="absolute inset-y-0 left-0 rounded bg-emerald-500" style={{ width: `${(v.meetings / maxV) * 100}%` }} />
+              </span>
+              <span className="w-14 text-right font-mono text-[10px] text-slate-500">
+                {v.total}/{v.worked}/<span className="text-emerald-600">{v.meetings}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [allRows, setAllRows] = useState<Row[]>([]);
   const [dates, setDates] = useState<string[]>([]);
   const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
   const [date, setDate] = useState<string | null>(null);
@@ -130,6 +205,10 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     setDateCounts(data.dateCounts || {});
     setDate(data.date || null);
     setLoading(false);
+    // Manager strip aggregates across ALL days (cheap: staffing is ≤25/day).
+    const allRes = await fetch(`/api/outbound?market=staffing&all=1`);
+    const allData = await allRes.json();
+    setAllRows(allData.rows || []);
   }, []);
 
   useEffect(() => {
@@ -144,7 +223,10 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
       body: JSON.stringify({ id: r.id, fields }),
     });
     const data = await res.json();
-    if (data.row) setRows((rs) => rs.map((x) => (x.id === r.id ? data.row : x)));
+    if (data.row) {
+      setRows((rs) => rs.map((x) => (x.id === r.id ? data.row : x)));
+      setAllRows((rs) => rs.map((x) => (x.id === r.id ? data.row : x)));
+    }
     setSaving(null);
   };
 
@@ -226,6 +308,9 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             </a>
           </div>
         </header>
+
+        {/* Manager overview — all days, live-updating with status changes */}
+        <ManagerStrip all={allRows} onPickTech={(t) => { setTech(t); setStatus(""); }} />
 
         {/* Day navigator + filters */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
