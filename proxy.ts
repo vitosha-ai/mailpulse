@@ -34,6 +34,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/api/login" ||
     pathname === "/api/outbound/ingest" ||
+    (pathname === "/api/outbound/companies" && request.method === "GET") ||
     pathname === "/api/outbound/feedback" ||
     (pathname === "/api/outbound/calls" && request.method === "POST") ||
     (pathname === "/api/outbound/learning" && request.method === "POST") ||
