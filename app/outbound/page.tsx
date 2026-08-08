@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
 import SeoWidget from "./SeoWidget";
+import StaffingBoard from "./StaffingBoard";
 
 type Row = {
   id: number;
@@ -713,6 +714,11 @@ export default function Outbound() {
         </div>
       </div>
     );
+  }
+
+  // Staffing is role-driven, not sequence-driven — its own tabular board.
+  if (scopeReady && marketScope === "staffing") {
+    return <StaffingBoard onExit={exitToRegions} />;
   }
 
   return (
