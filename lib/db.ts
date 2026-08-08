@@ -349,6 +349,7 @@ function migrate(db: Database.Database) {
     // Lead tracker (team workflow): who owns it, when contacted, what came back,
     // and when the row last changed. updated_at is stamped by every PATCH and
     // feedback import.
+    "ALTER TABLE research_queue ADD COLUMN phone TEXT", // company switchboard from Apollo org enrich
     "ALTER TABLE research_queue ADD COLUMN sdr TEXT",
     "ALTER TABLE research_queue ADD COLUMN contacted_at TEXT",
     "ALTER TABLE research_queue ADD COLUMN response TEXT",

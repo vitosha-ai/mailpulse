@@ -25,6 +25,7 @@ type Row = {
   email_1: string | null;        // email draft
   status: string;
   rep_notes: string | null;
+  phone: string | null;      // company switchboard from Apollo org enrich
   size: string | null;
   fit_reason: string | null;     // reasons; "⚠ ALSO IN B2B EMAIL PIPELINE..." prefix = collision
   research_trail: string | null; // "score N · vein k · posting url"
@@ -447,25 +448,51 @@ function FragmentRow({ r, d, isOpen, onToggle, onStatus, notes, setNote, saveNot
       {isOpen && (
         <tr className="border-b border-slate-100 bg-slate-50/60">
           <td colSpan={9} className="px-5 py-4">
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-4">
+              {/* CONTACT — exclusive panel: who to reach and every way to reach them */}
+              <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-violet-600">📇 Contact</p>
+                <p className="mt-1.5 text-sm font-bold text-slate-900">
+                  {r.first_name ? `${r.first_name} ${r.last_name ?? ""}` : "(no contact — hunt on LinkedIn)"}
+                </p>
+                <p className="text-xs text-slate-500">{r.title || ""}</p>
+                <div className="mt-2.5 space-y-1.5 text-xs">
+                  <p className="flex items-center gap-1.5">
+                    <span>📞</span>
+                    {r.phone
+                      ? <a href={`tel:${r.phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{r.phone} <span className="font-normal text-slate-400">(company line)</span></a>
+                      : <span className="text-slate-400">no number on file</span>}
+                  </p>
+                  <p className="flex items-center gap-1.5">
+                    <span>✉</span>
+                    {r.verified_email
+                      ? <button onClick={() => navigator.clipboard.writeText(r.verified_email!)}
+                          className="truncate font-semibold text-slate-800 hover:text-violet-700" title="Click to copy">
+                          {r.verified_email}
+                        </button>
+                      : <span className="text-slate-400">no email</span>}
+                  </p>
+                  <p className="flex items-center gap-1.5">
+                    <span>in</span>
+                    {r.linkedin
+                      ? <a href={r.linkedin.startsWith("http") ? r.linkedin : `https://${r.linkedin}`}
+                          target="_blank" rel="noreferrer"
+                          className="truncate font-semibold text-violet-600 underline decoration-violet-300 hover:text-violet-800">
+                          {r.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/(in\/)?/, "")}
+                        </a>
+                      : <span className="text-slate-400">no profile</span>}
+                  </p>
+                </div>
+              </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Why this lead</p>
                 <p className="mt-1 text-xs leading-relaxed text-slate-700">{reasons(r) || "—"}</p>
-                <div className="mt-3 space-y-1 text-xs">
-                  {r.source_url && (
-                    <a href={r.source_url.startsWith("http") ? r.source_url : `https://${r.source_url}`}
-                      target="_blank" rel="noreferrer" className="block truncate text-violet-600 underline decoration-violet-300 hover:text-violet-800">
-                      ↗ View the posting (verify before calling)
-                    </a>
-                  )}
-                  {r.verified_email && <p className="text-slate-600">✉ {r.verified_email}</p>}
-                  {r.linkedin && (
-                    <a href={r.linkedin.startsWith("http") ? r.linkedin : `https://${r.linkedin}`}
-                      target="_blank" rel="noreferrer" className="block truncate text-violet-600 underline decoration-violet-300 hover:text-violet-800">
-                      in/ {r.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/(in\/)?/, "")}
-                    </a>
-                  )}
-                </div>
+                {r.source_url && (
+                  <a href={r.source_url.startsWith("http") ? r.source_url : `https://${r.source_url}`}
+                    target="_blank" rel="noreferrer" className="mt-2 block truncate text-xs text-violet-600 underline decoration-violet-300 hover:text-violet-800">
+                    ↗ View the posting (verify before calling)
+                  </a>
+                )}
               </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Call opener</p>
