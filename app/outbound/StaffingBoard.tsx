@@ -154,8 +154,11 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [dateCounts, setDateCounts] = useState<Record<string, number>>({});
   const [date, setDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tech, setTech] = useState("");
+  const [techSel, setTechSel] = useState<string[]>([]);   // empty = all tech
+  const [techOpen, setTechOpen] = useState(false);
   const [status, setStatus] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<"score" | "days">("score");
@@ -195,10 +198,15 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<number | null>(null);
 
-  const load = useCallback(async (d?: string | null) => {
+  const load = useCallback(async (d?: string | null, from?: string, to?: string) => {
     setLoading(true);
     const params = new URLSearchParams({ market: "staffing" });
-    if (d) params.set("date", d);
+    if (from || to) {
+      // Date-range mode (inclusive; either bound optional) — the API scopes
+      // rows to the range and the day navigator is ignored.
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+    } else if (d) params.set("date", d);
     const res = await fetch(`/api/outbound?${params}`);
     const data = await res.json();
     setRows(data.rows || []);
@@ -231,15 +239,20 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     setSaving(null);
   };
 
+  // Tech options come from ALL days so the multi-select is stable even when
+  // the selected day happens to miss a vein.
   const techs = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.detected_stack || ""))).filter(Boolean).sort(),
-    [rows],
+    () => Array.from(new Set(allRows.map((r) => r.detected_stack || ""))).filter(Boolean).sort(),
+    [allRows],
   );
+
+  const toggleTech = (t: string) =>
+    setTechSel((sel) => (sel.includes(t) ? sel.filter((x) => x !== t) : [...sel, t]));
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
-      .filter((r) => (!tech || r.detected_stack === tech))
+      .filter((r) => (techSel.length === 0 || techSel.includes(r.detected_stack || "")))
       .filter((r) => (!status || r.status === status))
       .filter(
         (r) =>
@@ -251,7 +264,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         const vb = sortKey === "score" ? score(b) : daysOpen(b) ?? -1;
         return sortDesc ? vb - va : va - vb;
       });
-  }, [rows, tech, status, q, sortKey, sortDesc]);
+  }, [rows, techSel, status, q, sortKey, sortDesc]);
 
   const toggleSort = (k: "score" | "days") => {
     if (sortKey === k) setSortDesc((d) => !d);
@@ -311,21 +324,54 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         </header>
 
         {/* Manager overview — all days, live-updating with status changes */}
-        <ManagerStrip all={allRows} onPickTech={(t) => { setTech(t); setStatus(""); }} />
+        <ManagerStrip all={allRows} onPickTech={(t) => { setTechSel([t]); setStatus(""); }} />
 
         {/* Day navigator + filters */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <select value={date ?? ""} onChange={(e) => load(e.target.value)}
+          <select value={rangeFrom || rangeTo ? "" : date ?? ""}
+            onChange={(e) => { setRangeFrom(""); setRangeTo(""); load(e.target.value); }}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm">
+            {(rangeFrom || rangeTo) && <option value="">date range ↓</option>}
             {dates.map((d) => (
               <option key={d} value={d}>{d} · {dateCounts[d] ?? 0} roles</option>
             ))}
           </select>
-          <select value={tech} onChange={(e) => setTech(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm">
-            <option value="">All tech</option>
-            {techs.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          {/* Date range: set either bound; loads the API's from/to mode */}
+          <span className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs shadow-sm">
+            <input type="date" value={rangeFrom}
+              onChange={(e) => { setRangeFrom(e.target.value); load(null, e.target.value, rangeTo); }}
+              className="bg-transparent text-slate-600" title="From date" />
+            <span className="text-slate-400">→</span>
+            <input type="date" value={rangeTo}
+              onChange={(e) => { setRangeTo(e.target.value); load(null, rangeFrom, e.target.value); }}
+              className="bg-transparent text-slate-600" title="To date" />
+            {(rangeFrom || rangeTo) && (
+              <button onClick={() => { setRangeFrom(""); setRangeTo(""); load(); }}
+                className="ml-1 font-bold text-slate-400 hover:text-red-500" title="Clear range">✕</button>
+            )}
+          </span>
+          {/* Multi-select tech filter */}
+          <span className="relative">
+            <button onClick={() => setTechOpen((o) => !o)}
+              className={`rounded-lg border px-3 py-1.5 text-sm shadow-sm transition ${techSel.length ? "border-violet-400 bg-violet-50 text-violet-700" : "border-slate-300 bg-white text-slate-600"}`}>
+              {techSel.length === 0 ? "All tech" : techSel.length === 1 ? techSel[0] : `${techSel.length} techs`} ▾
+            </button>
+            {techOpen && (
+              <span className="absolute left-0 top-full z-20 mt-1 block max-h-64 w-56 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+                <button onClick={() => setTechSel([])}
+                  className="mb-1 block w-full rounded px-2 py-1 text-left text-xs font-semibold text-slate-500 hover:bg-slate-100">
+                  Clear — show all
+                </button>
+                {techs.map((t) => (
+                  <label key={t} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-violet-50">
+                    <input type="checkbox" checked={techSel.includes(t)} onChange={() => toggleTech(t)}
+                      className="accent-violet-600" />
+                    <span className="truncate">{t}</span>
+                  </label>
+                ))}
+              </span>
+            )}
+          </span>
           <select value={status} onChange={(e) => setStatus(e.target.value)}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm">
             <option value="">All statuses</option>
