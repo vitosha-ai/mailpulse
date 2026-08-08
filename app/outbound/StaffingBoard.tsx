@@ -71,6 +71,8 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<"score" | "days">("score");
+  const [sortDesc, setSortDesc] = useState(true);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<number | null>(null);
 
@@ -118,8 +120,21 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           !needle ||
           `${r.company} ${role(r)} ${r.first_name} ${r.last_name} ${r.title}`.toLowerCase().includes(needle),
       )
-      .sort((a, b) => score(b) - score(a));
-  }, [rows, tech, status, q]);
+      .sort((a, b) => {
+        const va = sortKey === "score" ? score(a) : daysOpen(a) ?? -1;
+        const vb = sortKey === "score" ? score(b) : daysOpen(b) ?? -1;
+        return sortDesc ? vb - va : va - vb;
+      });
+  }, [rows, tech, status, q, sortKey, sortDesc]);
+
+  const toggleSort = (k: "score" | "days") => {
+    if (sortKey === k) setSortDesc((d) => !d);
+    else {
+      setSortKey(k);
+      setSortDesc(true);
+    }
+  };
+  const arrow = (k: "score" | "days") => (sortKey === k ? (sortDesc ? " ▼" : " ▲") : "");
 
   const exportCsv = () => {
     const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -196,11 +211,17 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left font-mono text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="px-3 py-2.5">Score</th>
+                <th className="cursor-pointer select-none px-3 py-2.5 text-violet-700 hover:text-violet-900"
+                  onClick={() => toggleSort("score")} title="Sort by score">
+                  Score{arrow("score")}
+                </th>
                 <th className="px-3 py-2.5">Open role</th>
                 <th className="px-3 py-2.5">Tech</th>
                 <th className="px-3 py-2.5">Company</th>
-                <th className="px-3 py-2.5 text-right">Days open</th>
+                <th className="cursor-pointer select-none px-3 py-2.5 text-right text-violet-700 hover:text-violet-900"
+                  onClick={() => toggleSort("days")} title="Sort by days open">
+                  Days open{arrow("days")}
+                </th>
                 <th className="px-3 py-2.5">Contract</th>
                 <th className="px-3 py-2.5">Budget</th>
                 <th className="px-3 py-2.5">Contact</th>
