@@ -37,10 +37,11 @@ const RESPONSE_SUGGESTIONS = [
   "Bounced",
 ];
 
-const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare" };
+const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare", staffing: "Staffing" };
 const MARKET_BADGE: Record<string, string> = {
   us: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
   gcc: "bg-teal-100 text-teal-700 ring-1 ring-teal-300",
+  staffing: "bg-violet-100 text-violet-700 ring-1 ring-violet-300",
 };
 const STATUS_META: Record<string, string> = {
   Pending: "bg-slate-100 text-slate-600",

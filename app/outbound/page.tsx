@@ -36,12 +36,13 @@ type Row = {
   market: string | null;
 };
 
-const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare" };
+const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare", staffing: "Staffing" };
 
 // Per-lead market badge colors — GCC stands out, US stays quiet.
 const MARKET_BADGE: Record<string, string> = {
   us: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
   gcc: "bg-teal-100 text-teal-700 ring-1 ring-teal-300",
+  staffing: "bg-violet-100 text-violet-700 ring-1 ring-violet-300",
 };
 
 const STATUSES = ["Pending", "Verified", "Edited", "Sent", "Rejected", "Skipped"] as const;
@@ -627,6 +628,11 @@ export default function Outbound() {
         desc: "UAE · Saudi · Qatar · Kuwait · Bahrain · Oman · nightly at 7 AM GST",
         accent: "hover:border-teal-400/60 hover:shadow-teal-500/10",
       },
+      {
+        m: "staffing", flag: "🧑‍💼", name: "Staffing Agent",
+        desc: "Scarce-skill open reqs at direct clients · 25 unique clients nightly · call-first",
+        accent: "hover:border-violet-400/60 hover:shadow-violet-500/10",
+      },
     ];
     return (
       <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
@@ -702,7 +708,7 @@ export default function Outbound() {
           <SeoWidget />
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Two independent nightly agents publish here. Each region has its own leads, filters and exports.
+            Three independent nightly agents publish here. Each has its own leads, filters and exports.
           </p>
         </div>
       </div>
