@@ -266,6 +266,22 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
       });
   }, [rows, techSel, status, q, sortKey, sortDesc]);
 
+  // Role-driven grouping: one visual row per (company, role); extra contacts
+  // ride along and show in the expanded Contact panel. Status is per-role —
+  // changing it updates every contact row underneath.
+  const groups = useMemo(() => {
+    const seen = new Map<string, { main: Row; others: Row[] }>();
+    for (const r of visible) {
+      const k = `${(r.company || "").toLowerCase()}|${role(r).toLowerCase()}`;
+      const g = seen.get(k);
+      if (!g) seen.set(k, { main: r, others: [] });
+      else if (!g.main.verified_email && r.verified_email) {
+        seen.set(k, { main: r, others: [g.main, ...g.others] }); // best-reachable contact leads
+      } else g.others.push(r);
+    }
+    return [...seen.values()];
+  }, [visible]);
+
   const toggleSort = (k: "score" | "days") => {
     if (sortKey === k) setSortDesc((d) => !d);
     else {
@@ -379,7 +395,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           </select>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="⌕ role, company, contact…"
             className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm" />
-          <span className="ml-auto text-xs text-slate-500">{visible.length} role(s)</span>
+          <span className="ml-auto text-xs text-slate-500">{groups.length} role(s)</span>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -419,13 +435,13 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
                   No roles yet — the agent delivers up to 25 unique clients nightly.
                 </td></tr>
               )}
-              {visible.map((r) => {
+              {groups.map(({ main: r, others }) => {
                 const d = daysOpen(r);
                 const isOpen = open === r.id;
                 return (
-                  <FragmentRow key={r.id} r={r} d={d} isOpen={isOpen}
+                  <FragmentRow key={r.id} r={r} others={others} d={d} isOpen={isOpen}
                     onToggle={() => setOpen(isOpen ? null : r.id)}
-                    onStatus={(s) => patch(r, { status: s })}
+                    onStatus={(s) => { patch(r, { status: s }); others.forEach((o) => patch(o, { status: s })); }}
                     notes={notes[r.id] ?? r.rep_notes ?? ""}
                     setNote={(v) => setNotes((n) => ({ ...n, [r.id]: v }))}
                     saveNote={() => patch(r, { rep_notes: notes[r.id] ?? "" })}
@@ -445,8 +461,8 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   );
 }
 
-function FragmentRow({ r, d, isOpen, onToggle, onStatus, notes, setNote, saveNote, saving }: {
-  r: Row; d: number | null; isOpen: boolean;
+function FragmentRow({ r, others = [], d, isOpen, onToggle, onStatus, notes, setNote, saveNote, saving }: {
+  r: Row; others?: Row[]; d: number | null; isOpen: boolean;
   onToggle: () => void; onStatus: (s: string) => void;
   notes: string; setNote: (v: string) => void; saveNote: () => void; saving: boolean;
 }) {
@@ -481,6 +497,7 @@ function FragmentRow({ r, d, isOpen, onToggle, onStatus, notes, setNote, saveNot
         <td className="max-w-[190px] px-3 py-2.5">
           <div className="truncate font-medium text-slate-800">
             {r.first_name ? `${r.first_name} ${r.last_name ?? ""}` : <span className="text-slate-400">(hunt on LinkedIn)</span>}
+            {others.length > 0 && <span className="ml-1 text-[10px] font-semibold text-violet-600">+{others.length} more</span>}
           </div>
           <div className="truncate text-[11px] text-slate-400">{r.title}</div>
         </td>
@@ -495,40 +512,46 @@ function FragmentRow({ r, d, isOpen, onToggle, onStatus, notes, setNote, saveNot
         <tr className="border-b border-slate-100 bg-slate-50/60">
           <td colSpan={9} className="px-5 py-4">
             <div className="grid gap-4 lg:grid-cols-4">
-              {/* CONTACT — exclusive panel: who to reach and every way to reach them */}
+              {/* CONTACT — exclusive panel: every contact for this role, every channel */}
               <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-violet-600">📇 Contact</p>
-                <p className="mt-1.5 text-sm font-bold text-slate-900">
-                  {r.first_name ? `${r.first_name} ${r.last_name ?? ""}` : "(no contact — hunt on LinkedIn)"}
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-violet-600">
+                  📇 Contact{others.length > 0 ? `s (${others.length + 1})` : ""}
                 </p>
-                <p className="text-xs text-slate-500">{r.title || ""}</p>
-                <div className="mt-2.5 space-y-1.5 text-xs">
-                  <p className="flex items-center gap-1.5">
-                    <span>📞</span>
-                    {r.phone
-                      ? <a href={`tel:${r.phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{r.phone} <span className="font-normal text-slate-400">(company line)</span></a>
-                      : <span className="text-slate-400">no number on file</span>}
-                  </p>
-                  <p className="flex items-center gap-1.5">
-                    <span>✉</span>
-                    {r.verified_email
-                      ? <button onClick={() => navigator.clipboard.writeText(r.verified_email!)}
-                          className="truncate font-semibold text-slate-800 hover:text-violet-700" title="Click to copy">
-                          {r.verified_email}
-                        </button>
-                      : <span className="text-slate-400">no email</span>}
-                  </p>
-                  <p className="flex items-center gap-1.5">
-                    <span>in</span>
-                    {r.linkedin
-                      ? <a href={r.linkedin.startsWith("http") ? r.linkedin : `https://${r.linkedin}`}
-                          target="_blank" rel="noreferrer"
-                          className="truncate font-semibold text-violet-600 underline decoration-violet-300 hover:text-violet-800">
-                          {r.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/(in\/)?/, "")}
-                        </a>
-                      : <span className="text-slate-400">no profile</span>}
-                  </p>
-                </div>
+                {[r, ...others].map((c, i) => (
+                  <div key={c.id} className={i > 0 ? "mt-3 border-t border-violet-200/70 pt-2.5" : ""}>
+                    <p className="mt-1.5 text-sm font-bold text-slate-900">
+                      {c.first_name ? `${c.first_name} ${c.last_name ?? ""}` : "(no contact — hunt on LinkedIn)"}
+                    </p>
+                    <p className="text-xs text-slate-500">{c.title || ""}</p>
+                    <div className="mt-2 space-y-1.5 text-xs">
+                      <p className="flex items-center gap-1.5">
+                        <span>📞</span>
+                        {c.phone
+                          ? <a href={`tel:${c.phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{c.phone} <span className="font-normal text-slate-400">(company line)</span></a>
+                          : <span className="text-slate-400">no number on file</span>}
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <span>✉</span>
+                        {c.verified_email
+                          ? <button onClick={() => navigator.clipboard.writeText(c.verified_email!)}
+                              className="truncate font-semibold text-slate-800 hover:text-violet-700" title="Click to copy">
+                              {c.verified_email}
+                            </button>
+                          : <span className="text-slate-400">no email</span>}
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <span>in</span>
+                        {c.linkedin
+                          ? <a href={c.linkedin.startsWith("http") ? c.linkedin : `https://${c.linkedin}`}
+                              target="_blank" rel="noreferrer"
+                              className="truncate font-semibold text-violet-600 underline decoration-violet-300 hover:text-violet-800">
+                              {c.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/(in\/)?/, "")}
+                            </a>
+                          : <span className="text-slate-400">no profile</span>}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Why this lead</p>
