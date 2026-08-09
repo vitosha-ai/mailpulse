@@ -229,6 +229,20 @@ function migrate(db: Database.Database) {
     -- code, stores only its SHA-256, and shows the code once. The code opens
     -- ONLY the SDR portal — never the rest of the app — and the portal serves
     -- a server-side-limited field set (no scores, reasons, or agent mechanics).
+    -- Admin identities (RBAC layer above the shared password gate).
+    -- role: 'super' (Kartheek) can manage admins and cannot be revoked or
+    -- re-keyed by anyone but themselves; 'admin' (Ajay) manages SDRs and
+    -- assignment. Personal access keys are emailed only; only hashes stored.
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL DEFAULT 'admin',
+      code_hash TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS sdr_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
