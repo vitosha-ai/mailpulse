@@ -10,7 +10,9 @@ import { getDb } from "@/lib/db";
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const newCode = () => `sdr-${randomBytes(3).toString("hex")}-${randomBytes(3).toString("hex")}`;
 
-async function emailCode(name: string, email: string, code: string): Promise<string | null> {
+// Invite carries NO credential — login is email-OTP: the SDR enters their
+// email on the portal and receives a fresh one-time code for every login.
+async function emailInvite(name: string, email: string): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.SDR_INVITE_FROM || "josh.ramirez@vitosha-inc.com";
   if (!key) return "RESEND_API_KEY not configured on this service";
@@ -21,14 +23,13 @@ async function emailCode(name: string, email: string, code: string): Promise<str
     body: JSON.stringify({
       from,
       to: [email],
-      subject: "Your Vitosha call-desk access",
+      subject: "You're invited: Vitosha call desk",
       text:
         `Hi ${name},\n\n` +
-        `You've been invited to the Vitosha staffing call desk. Your assigned leads, ` +
-        `contact details, and call notes live here:\n\n  ${portal}\n\n` +
-        `Your access code (keep it private):\n\n  ${code}\n\n` +
-        `Open the link, enter the code once, and you're in. If the code stops working, ` +
-        `ask your manager for a new one.\n\n— Vitosha`,
+        `You've been invited to the Vitosha call desk. Your assigned leads, contact ` +
+        `details, and call notes live here:\n\n  ${portal}\n\n` +
+        `To sign in, enter this email address (${email}) on that page — a one-time ` +
+        `login code will be emailed to you each time.\n\n— Vitosha`,
     }),
   });
   if (!r.ok) return `Resend ${r.status}: ${(await r.text()).slice(0, 150)}`;
@@ -50,18 +51,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name and a valid email are required" }, { status: 400 });
   }
 
-  const code = newCode();
   try {
+    // code_hash is legacy (pre-OTP schema, NOT NULL UNIQUE) — filled with a
+    // random unusable value; real auth is the per-login OTP.
     getDb()
       .prepare("INSERT INTO sdr_users (name, email, code_hash) VALUES (?, ?, ?)")
-      .run(name, email, sha256(code));
+      .run(name, email, sha256(newCode()));
   } catch {
     return NextResponse.json({ error: "an SDR with that name or email already exists" }, { status: 409 });
   }
 
-  const mailErr = await emailCode(name, email, code);
+  const mailErr = await emailInvite(name, email);
   if (mailErr) {
-    // Invite without a delivered code is useless — roll back so the admin can retry.
+    // Invite without a delivered email is useless — roll back so the admin can retry.
     getDb().prepare("DELETE FROM sdr_users WHERE name = ?").run(name);
     return NextResponse.json({ error: `invite email failed: ${mailErr}` }, { status: 502 });
   }
@@ -80,7 +82,10 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   if (body.action === "deactivate") {
-    db.prepare("UPDATE sdr_users SET active = 0 WHERE id = ?").run(body.id);
+    // Lockout is immediate: live session and any pending OTP die with the flag.
+    db.prepare(
+      "UPDATE sdr_users SET active = 0, session_hash = NULL, otp_hash = NULL WHERE id = ?",
+    ).run(body.id);
     return NextResponse.json({ ok: true });
   }
   if (body.action === "activate") {
@@ -88,10 +93,12 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
   if (body.action === "regenerate") {
-    const code = newCode();
-    const mailErr = await emailCode(user.name, user.email, code);
+    // Re-send the invite email and kill any live session (fresh OTP required).
+    const mailErr = await emailInvite(user.name, user.email);
     if (mailErr) return NextResponse.json({ error: `invite email failed: ${mailErr}` }, { status: 502 });
-    db.prepare("UPDATE sdr_users SET code_hash = ?, active = 1 WHERE id = ?").run(sha256(code), body.id);
+    db.prepare(
+      "UPDATE sdr_users SET active = 1, session_hash = NULL, otp_hash = NULL WHERE id = ?",
+    ).run(body.id);
     return NextResponse.json({ ok: true, sent: true });
   }
   return NextResponse.json({ error: "unknown action" }, { status: 400 });

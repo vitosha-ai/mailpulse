@@ -643,8 +643,8 @@ function ManageSdrs({ sdrs, onClose, onChanged }: {
                 <p className="truncate text-xs text-slate-400">{s.email}</p>
               </div>
               <button onClick={() => act(s.id, "regenerate")} disabled={busy}
-                className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400" title="Email a fresh access code (old one stops working)">
-                ↻ Resend code
+                className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400" title="Re-send the invite email and force a fresh login">
+                ↻ Resend invite
               </button>
               {s.active ? (
                 <button onClick={() => act(s.id, "deactivate")} disabled={busy}

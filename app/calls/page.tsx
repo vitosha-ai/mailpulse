@@ -55,7 +55,9 @@ const daysOf = (l: Lead) => {
 export default function CallsPage() {
   const [me, setMe] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
-  const [code, setCode] = useState("");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [loginErr, setLoginErr] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [targets, setTargets] = useState<string[]>([]);
@@ -81,15 +83,29 @@ export default function CallsPage() {
     load();
   }, [load]);
 
-  const login = async () => {
+  const requestOtp = async () => {
     setLoginErr("");
     const res = await fetch("/api/calls/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code.trim() }),
+      body: JSON.stringify({ email: email.trim() }),
     });
     if (!res.ok) {
-      setLoginErr("That code didn't work — check it or ask your manager for a new one.");
+      setLoginErr("Couldn't send a code right now — try again in a minute.");
+      return;
+    }
+    setOtpSent(true);
+  };
+
+  const verifyOtp = async () => {
+    setLoginErr("");
+    const res = await fetch("/api/calls/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
+    });
+    if (!res.ok) {
+      setLoginErr("That code didn't work or expired — request a new one.");
       return;
     }
     await load();
@@ -131,16 +147,39 @@ export default function CallsPage() {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <h1 className="text-xl font-bold text-slate-900">📞 Vitosha Call Desk</h1>
-          <p className="mt-1 text-sm text-slate-500">Enter the access code from your invite email.</p>
-          <input value={code} onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && login()}
-            placeholder="sdr-xxxxxx-xxxxxx" autoFocus
-            className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm" />
-          {loginErr && <p className="mt-2 text-xs text-red-600">{loginErr}</p>}
-          <button onClick={login}
-            className="mt-4 w-full rounded-lg bg-violet-600 py-2 font-semibold text-white transition hover:bg-violet-700">
-            Open my leads
-          </button>
+          {!otpSent ? (
+            <>
+              <p className="mt-1 text-sm text-slate-500">Enter your work email — we'll send you a one-time login code.</p>
+              <input value={email} onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && requestOtp()}
+                placeholder="you@company.com" type="email" autoFocus
+                className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              {loginErr && <p className="mt-2 text-xs text-red-600">{loginErr}</p>}
+              <button onClick={requestOtp} disabled={!email.trim()}
+                className="mt-4 w-full rounded-lg bg-violet-600 py-2 font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50">
+                Email me a code
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-slate-500">
+                If <b>{email}</b> is invited, a 6-digit code is on its way. Enter it below (valid 10 minutes).
+              </p>
+              <input value={otp} onChange={(e) => setOtp(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && verifyOtp()}
+                placeholder="123456" inputMode="numeric" autoFocus
+                className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-center font-mono text-lg tracking-[0.4em]" />
+              {loginErr && <p className="mt-2 text-xs text-red-600">{loginErr}</p>}
+              <button onClick={verifyOtp} disabled={!otp.trim()}
+                className="mt-4 w-full rounded-lg bg-violet-600 py-2 font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50">
+                Open my leads
+              </button>
+              <button onClick={() => { setOtpSent(false); setOtp(""); }}
+                className="mt-2 w-full text-xs text-slate-400 hover:text-slate-600">
+                ← different email / resend
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { getDb } from "@/lib/db";
 
 // SDR portal data API. Auth = sdr_auth cookie (hash of the SDR's access code).
@@ -28,10 +29,13 @@ type QueueRow = {
 };
 
 function authSdr(request: NextRequest): string | null {
-  const hash = request.cookies.get("sdr_auth")?.value;
-  if (!hash) return null;
+  // Cookie holds the raw 12h session token minted after OTP verification;
+  // only its hash is stored (email-OTP login, owner decision 2026-08-08).
+  const token = request.cookies.get("sdr_auth")?.value;
+  if (!token) return null;
+  const hash = createHash("sha256").update(token).digest("hex");
   const row = getDb()
-    .prepare("SELECT name FROM sdr_users WHERE code_hash = ? AND active = 1")
+    .prepare("SELECT name FROM sdr_users WHERE session_hash = ? AND active = 1")
     .get(hash) as { name: string } | undefined;
   return row?.name ?? null;
 }
