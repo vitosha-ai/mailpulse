@@ -66,6 +66,10 @@ export default function Login() {
         >
           {busy ? "Checking…" : "Enter"}
         </button>
+        <a href="/calls"
+          className="mt-4 block text-center text-xs text-slate-400 underline decoration-slate-300 transition hover:text-violet-600">
+          SDR? Sign in to the call desk →
+        </a>
       </form>
     </div>
   );

@@ -163,7 +163,6 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [rangeTo, setRangeTo] = useState("");
   const [owner, setOwner] = useState("");             // table filter: "", "unassigned", or a name
   const [sdrs, setSdrs] = useState<{ id: number; name: string; email: string; active: number }[]>([]);
-  const [manageOpen, setManageOpen] = useState(false);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<"score" | "days">("score");
@@ -425,10 +424,10 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             <option value="unassigned">Unassigned</option>
             {assignTargets.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button onClick={() => setManageOpen(true)}
+          <a href="/outbound/team"
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm transition hover:border-slate-400">
-            👥 SDRs
-          </button>
+            👥 Team
+          </a>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="⌕ role, company, contact…"
             className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm" />
           <span className="ml-auto text-xs text-slate-500">{groups.length} role(s)</span>
@@ -496,170 +495,6 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           ⚠ = this company is also in the B2B email pipeline — coordinate with the campaign team before calling.
         </p>
 
-        {manageOpen && <ManageSdrs sdrs={sdrs} onClose={() => setManageOpen(false)} onChanged={loadSdrs} />}
-      </div>
-    </div>
-  );
-}
-
-// ---- SDR management (admin-only; the invite email carries the access code) --
-
-type AdminRow = { id: number; name: string; email: string; role: string; active: number; has_key: number };
-
-function ManageSdrs({ sdrs, onClose, onChanged }: {
-  sdrs: { id: number; name: string; email: string; active: number }[];
-  onClose: () => void; onChanged: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [admins, setAdmins] = useState<AdminRow[]>([]);
-  const [meAdmin, setMeAdmin] = useState<{ name: string; role: string } | null>(null);
-  const [adminKey, setAdminKey] = useState("");
-
-  const loadAdmins = useCallback(async () => {
-    const res = await fetch("/api/admins");
-    if (res.ok) {
-      const d = await res.json();
-      setAdmins(d.admins || []);
-      setMeAdmin(d.me || null);
-    }
-  }, []);
-  useEffect(() => { loadAdmins(); }, [loadAdmins]);
-
-  const adminAct = async (payload: Record<string, unknown>, method = "POST") => {
-    setBusy(true); setMsg("");
-    const res = await fetch("/api/admins", {
-      method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    setBusy(false);
-    setMsg(res.ok ? (data.sent ? `✅ Key emailed to ${data.to}` : data.name ? `✅ Identified as ${data.name} (${data.role})` : "✅ Done") : `❌ ${data.error || "failed"}`);
-    if (res.ok) { setAdminKey(""); loadAdmins(); }
-  };
-
-  const invite = async () => {
-    setBusy(true); setMsg("");
-    const res = await fetch("/api/sdrs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) { setMsg(data.error || "invite failed"); return; }
-    setMsg(`✅ Invite emailed to ${data.email}`);
-    setName(""); setEmail("");
-    onChanged();
-  };
-
-  const act = async (id: number, action: string) => {
-    setBusy(true); setMsg("");
-    const res = await fetch("/api/sdrs", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
-    });
-    const data = await res.json();
-    setBusy(false);
-    setMsg(res.ok ? (action === "regenerate" ? "✅ New code emailed" : "✅ Done") : (data.error || "failed"));
-    onChanged();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">👥 Team access</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
-        </div>
-
-        {/* Admins: Kartheek (super — self-managed only) + Ajay */}
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-          <div className="flex items-center justify-between">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Admins</p>
-            {meAdmin
-              ? <span className="text-[11px] font-semibold text-emerald-600">you are {meAdmin.name} ({meAdmin.role})</span>
-              : <span className="flex items-center gap-1">
-                  <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)}
-                    placeholder="adm-… key" className="w-36 rounded border border-slate-300 px-2 py-0.5 font-mono text-[11px]" />
-                  <button onClick={() => adminAct({ action: "identify", key: adminKey })} disabled={busy || !adminKey}
-                    className="rounded bg-slate-700 px-2 py-0.5 text-[11px] font-semibold text-white disabled:opacity-50">
-                    Identify
-                  </button>
-                </span>}
-          </div>
-          <div className="mt-2 space-y-1.5">
-            {admins.map((a) => (
-              <div key={a.id} className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-1.5 ${a.active ? "border-slate-200" : "border-slate-100 opacity-60"}`}>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-800">
-                    {a.name}
-                    <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${a.role === "super" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
-                      {a.role === "super" ? "★ super admin" : "admin"}
-                    </span>
-                    {!a.active && <span className="ml-1 text-[10px] font-normal text-slate-400">deactivated</span>}
-                  </p>
-                  <p className="truncate text-xs text-slate-400">{a.email}{!a.has_key && " · no key issued yet"}</p>
-                </div>
-                <button onClick={() => adminAct({ action: "send_key", id: a.id })} disabled={busy}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400"
-                  title="Email a personal access key">
-                  {a.has_key ? "↻ Re-key" : "✉ Email key"}
-                </button>
-                {meAdmin?.role === "super" && a.role !== "super" && (a.active
-                  ? <button onClick={() => adminAct({ id: a.id, action: "deactivate" }, "PATCH")} disabled={busy}
-                      className="rounded-md border border-red-200 px-2 py-1 text-[11px] text-red-500">Deactivate</button>
-                  : <button onClick={() => adminAct({ id: a.id, action: "activate" }, "PATCH")} disabled={busy}
-                      className="rounded-md border border-emerald-300 px-2 py-1 text-[11px] text-emerald-600">Reactivate</button>)}
-              </div>
-            ))}
-          </div>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Invites are emailed only — the access code opens the call desk (/calls) and nothing else.
-          SDRs see their assigned leads' contact surface; never scores, reasons, or the agents.
-        </p>
-
-        <div className="mt-4 flex gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@…"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <button onClick={invite} disabled={busy || !name || !email}
-            className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
-            {busy ? "…" : "Invite"}
-          </button>
-        </div>
-        {msg && <p className="mt-2 text-xs text-slate-600">{msg}</p>}
-
-        <div className="mt-4 max-h-64 space-y-1.5 overflow-y-auto">
-          {sdrs.length === 0 && <p className="py-4 text-center text-xs text-slate-400">No SDRs yet — invite the first one above.</p>}
-          {sdrs.map((s) => (
-            <div key={s.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${s.active ? "border-slate-200" : "border-slate-100 bg-slate-50 opacity-60"}`}>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-800">{s.name}{!s.active && <span className="ml-2 text-[10px] font-normal text-slate-400">deactivated</span>}</p>
-                <p className="truncate text-xs text-slate-400">{s.email}</p>
-              </div>
-              <button onClick={() => act(s.id, "regenerate")} disabled={busy}
-                className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400" title="Re-send the invite email and force a fresh login">
-                ↻ Resend invite
-              </button>
-              {s.active ? (
-                <button onClick={() => act(s.id, "deactivate")} disabled={busy}
-                  className="rounded-md border border-red-200 px-2 py-1 text-[11px] text-red-500 hover:border-red-400" title="Locks them out immediately">
-                  Deactivate
-                </button>
-              ) : (
-                <button onClick={() => act(s.id, "activate")} disabled={busy}
-                  className="rounded-md border border-emerald-300 px-2 py-1 text-[11px] text-emerald-600">
-                  Reactivate
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

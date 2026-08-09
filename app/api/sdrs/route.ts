@@ -37,10 +37,18 @@ async function emailInvite(name: string, email: string): Promise<string | null> 
 }
 
 export async function GET() {
-  const rows = getDb()
+  const db = getDb();
+  const rows = db
     .prepare("SELECT id, name, email, active, created_at FROM sdr_users ORDER BY active DESC, name")
     .all();
-  return NextResponse.json({ sdrs: rows });
+  const logins = db
+    .prepare(
+      `SELECT u.name AS sdr, l.ip, l.city, l.country, l.user_agent, l.created_at
+       FROM sdr_logins l JOIN sdr_users u ON u.id = l.sdr_id
+       ORDER BY l.created_at DESC LIMIT 100`,
+    )
+    .all();
+  return NextResponse.json({ sdrs: rows, logins });
 }
 
 export async function POST(request: NextRequest) {

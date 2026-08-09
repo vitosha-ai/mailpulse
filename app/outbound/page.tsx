@@ -649,6 +649,12 @@ export default function Outbound() {
             </div>
             <div className="flex items-center gap-2">
               <a
+                href="/outbound/team"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+              >
+                👥 Team
+              </a>
+              <a
                 href="/outbound/tracker"
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
               >
