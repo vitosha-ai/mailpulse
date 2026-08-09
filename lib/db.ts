@@ -243,6 +243,19 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- SDR login audit trail: every successful portal login with IP + coarse
+    -- geo. Drives the new-location / shared-access alerts emailed to admins.
+    CREATE TABLE IF NOT EXISTS sdr_logins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sdr_id INTEGER NOT NULL,
+      ip TEXT NOT NULL,
+      city TEXT,
+      country TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sdr_logins ON sdr_logins(sdr_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS sdr_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
@@ -383,6 +396,7 @@ function migrate(db: Database.Database) {
     "ALTER TABLE sdr_users ADD COLUMN otp_hash TEXT",
     "ALTER TABLE sdr_users ADD COLUMN otp_expires TEXT",
     "ALTER TABLE sdr_users ADD COLUMN session_hash TEXT",
+    "ALTER TABLE sdr_users ADD COLUMN session_ip TEXT", // session is bound to its login IP
     "ALTER TABLE research_queue ADD COLUMN sdr TEXT",
     "ALTER TABLE research_queue ADD COLUMN contacted_at TEXT",
     "ALTER TABLE research_queue ADD COLUMN response TEXT",

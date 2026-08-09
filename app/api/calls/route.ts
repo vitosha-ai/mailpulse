@@ -31,13 +31,18 @@ type QueueRow = {
 function authSdr(request: NextRequest): string | null {
   // Cookie holds the raw 12h session token minted after OTP verification;
   // only its hash is stored (email-OTP login, owner decision 2026-08-08).
+  // The session is BOUND to its login IP: a copied cookie used from another
+  // network is rejected, forcing a fresh OTP only the SDR's inbox can pass.
   const token = request.cookies.get("sdr_auth")?.value;
   if (!token) return null;
   const hash = createHash("sha256").update(token).digest("hex");
   const row = getDb()
-    .prepare("SELECT name FROM sdr_users WHERE session_hash = ? AND active = 1")
-    .get(hash) as { name: string } | undefined;
-  return row?.name ?? null;
+    .prepare("SELECT name, session_ip FROM sdr_users WHERE session_hash = ? AND active = 1")
+    .get(hash) as { name: string; session_ip: string | null } | undefined;
+  if (!row) return null;
+  const ip = (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
+  if (row.session_ip && row.session_ip !== ip) return null;
+  return row.name;
 }
 
 // The stored detail ends with ranking reasons (secret sauce). Keep only the
