@@ -105,9 +105,24 @@ export default function Tracker() {
     }
   };
 
+  // SDR names = invited accounts (the assignable set) + any legacy free-text
+  // owners already on rows. Assigning an invited SDR routes the lead to their
+  // /calls portal automatically.
+  const [invited, setInvited] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/sdrs").then(async (r) => {
+      if (r.ok) setInvited(((await r.json()).sdrs || [])
+        .filter((s: { active: number }) => s.active)
+        .map((s: { name: string }) => s.name));
+    });
+  }, []);
   const sdrs = useMemo(
-    () => Array.from(new Set(rows.map((r) => (r.sdr || "").trim()).filter(Boolean))).sort(),
-    [rows],
+    () => Array.from(new Set([
+      "Ajay",
+      ...invited,
+      ...rows.map((r) => (r.sdr || "").trim()).filter(Boolean),
+    ])).sort(),
+    [rows, invited],
   );
   const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.market || "us"))).sort(), [rows]);
 

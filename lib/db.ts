@@ -224,6 +224,20 @@ function migrate(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_date ON agent_usage(run_date DESC);
 
+    -- SDR accounts for the staffing call portal (/calls). Admins (the main
+    -- password holders) invite an SDR by name; the server generates an access
+    -- code, stores only its SHA-256, and shows the code once. The code opens
+    -- ONLY the SDR portal — never the rest of the app — and the portal serves
+    -- a server-side-limited field set (no scores, reasons, or agent mechanics).
+    CREATE TABLE IF NOT EXISTS sdr_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      code_hash TEXT NOT NULL UNIQUE,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Learning log: a readable feed of what each agent did (kind='auto',
     -- one digest per nightly run) and what it has learned (kind='learned',
     -- written only when the user approves an improvement in a review).

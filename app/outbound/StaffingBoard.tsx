@@ -26,6 +26,7 @@ type Row = {
   status: string;
   rep_notes: string | null;
   phone: string | null;      // company switchboard from Apollo org enrich
+  sdr: string | null;        // owner: an invited SDR's name, or "Ajay"
   size: string | null;
   fit_reason: string | null;     // reasons; "⚠ ALSO IN B2B EMAIL PIPELINE..." prefix = collision
   research_trail: string | null; // "score N · vein k · posting url"
@@ -62,8 +63,8 @@ const reasons = (r: Row) => (r.fit_reason || "").replace(/^⚠[^·]*·\s*/, "");
 const scoreTone = (s: number) =>
   s >= 85 ? "bg-red-100 text-red-700" : s >= 65 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
 
-// Default column widths (px): Score, Role, Tech, Company, Days, Contract, Budget, Contact, Status.
-const COL_DEFAULTS = [70, 240, 120, 200, 90, 80, 130, 190, 110];
+// Default column widths (px): Score, Role, Tech, Company, Days, Contract, Budget, Contact, Owner, Status.
+const COL_DEFAULTS = [70, 240, 120, 200, 90, 80, 130, 190, 110, 110];
 
 function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
   return (
@@ -75,7 +76,7 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 // ---- Manager overview (computed over ALL days, not just the selected one) ---
 
-function ManagerStrip({ all, onPickTech }: { all: Row[]; onPickTech: (t: string) => void }) {
+function ManagerStrip({ all, onPickTech, unassigned }: { all: Row[]; onPickTech: (t: string) => void; unassigned: number }) {
   const pending = all.filter((r) => r.status === "Pending");
   const meetings = all.filter((r) => r.status === "Meeting");
   const worked = all.filter((r) => r.status !== "Pending");
@@ -90,6 +91,7 @@ function ManagerStrip({ all, onPickTech }: { all: Row[]; onPickTech: (t: string)
   });
 
   const KPIS: { label: string; value: number; tone: string; sub?: string }[] = [
+    { label: "Unassigned roles", value: unassigned, tone: unassigned ? "text-red-600" : "text-slate-400", sub: "allocate these" },
     { label: "Untouched leads", value: pending.length, tone: "text-slate-900" },
     { label: "Hot & untouched (85+)", value: hotUntouched.length, tone: hotUntouched.length ? "text-red-600" : "text-slate-400", sub: "call these first" },
     { label: "Contract-ready waiting", value: contractReady.length, tone: contractReady.length ? "text-emerald-600" : "text-slate-400" },
@@ -159,6 +161,9 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   const [status, setStatus] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
+  const [owner, setOwner] = useState("");             // table filter: "", "unassigned", or a name
+  const [sdrs, setSdrs] = useState<{ id: number; name: string; email: string; active: number }[]>([]);
+  const [manageOpen, setManageOpen] = useState(false);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<"score" | "days">("score");
@@ -224,6 +229,19 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     load();
   }, [load]);
 
+  const loadSdrs = useCallback(async () => {
+    const res = await fetch("/api/sdrs");
+    if (res.ok) setSdrs((await res.json()).sdrs || []);
+  }, []);
+  useEffect(() => {
+    loadSdrs();
+  }, [loadSdrs]);
+  const activeSdrNames = useMemo(
+    () => sdrs.filter((s) => s.active).map((s) => s.name),
+    [sdrs],
+  );
+  const assignTargets = useMemo(() => ["Ajay", ...activeSdrNames], [activeSdrNames]);
+
   const patch = async (r: Row, fields: Record<string, string>) => {
     setSaving(r.id);
     const res = await fetch("/api/outbound", {
@@ -253,6 +271,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     const needle = q.trim().toLowerCase();
     return rows
       .filter((r) => (techSel.length === 0 || techSel.includes(r.detected_stack || "")))
+      .filter((r) => !owner || (owner === "unassigned" ? !r.sdr : r.sdr === owner))
       .filter((r) => (!status || r.status === status))
       .filter(
         (r) =>
@@ -264,7 +283,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         const vb = sortKey === "score" ? score(b) : daysOpen(b) ?? -1;
         return sortDesc ? vb - va : va - vb;
       });
-  }, [rows, techSel, status, q, sortKey, sortDesc]);
+  }, [rows, techSel, status, q, sortKey, sortDesc, owner]);
 
   // Role-driven grouping: one visual row per (company, role); extra contacts
   // ride along and show in the expanded Contact panel. Status is per-role —
@@ -340,7 +359,14 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         </header>
 
         {/* Manager overview — all days, live-updating with status changes */}
-        <ManagerStrip all={allRows} onPickTech={(t) => { setTechSel([t]); setStatus(""); }} />
+        <ManagerStrip all={allRows} onPickTech={(t) => { setTechSel([t]); setStatus(""); }}
+          unassigned={(() => {
+            const seen = new Set<string>();
+            for (const r of allRows) {
+              if (!r.sdr && r.status === "Pending") seen.add(`${(r.company || "").toLowerCase()}|${role(r).toLowerCase()}`);
+            }
+            return seen.size;
+          })()} />
 
         {/* Day navigator + filters */}
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -393,6 +419,16 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={owner} onChange={(e) => setOwner(e.target.value)}
+            className={`rounded-lg border px-3 py-1.5 text-sm shadow-sm ${owner ? "border-violet-400 bg-violet-50 text-violet-700" : "border-slate-300 bg-white"}`}>
+            <option value="">All owners</option>
+            <option value="unassigned">Unassigned</option>
+            {assignTargets.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <button onClick={() => setManageOpen(true)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm transition hover:border-slate-400">
+            👥 SDRs
+          </button>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="⌕ role, company, contact…"
             className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm" />
           <span className="ml-auto text-xs text-slate-500">{groups.length} role(s)</span>
@@ -414,6 +450,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
                   { label: <>Contract</> },
                   { label: <>Budget</> },
                   { label: <>Contact</> },
+                  { label: <>Owner</> },
                   { label: <>Status</> },
                 ].map((h, i) => (
                   <th key={i}
@@ -428,10 +465,10 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={10} className="px-3 py-10 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && visible.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-400">
+                <tr><td colSpan={10} className="px-3 py-10 text-center text-slate-400">
                   No roles yet — the agent delivers up to 25 unique clients nightly.
                 </td></tr>
               )}
@@ -440,6 +477,8 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
                 const isOpen = open === r.id;
                 return (
                   <FragmentRow key={r.id} r={r} others={others} d={d} isOpen={isOpen}
+                    assignTargets={assignTargets}
+                    onAssign={(who) => { patch(r, { sdr: who }); others.forEach((o) => patch(o, { sdr: who })); }}
                     onToggle={() => setOpen(isOpen ? null : r.id)}
                     onStatus={(s) => { patch(r, { status: s }); others.forEach((o) => patch(o, { status: s })); }}
                     notes={notes[r.id] ?? r.rep_notes ?? ""}
@@ -456,13 +495,110 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         <p className="mt-4 text-center text-xs text-slate-400">
           ⚠ = this company is also in the B2B email pipeline — coordinate with the campaign team before calling.
         </p>
+
+        {manageOpen && <ManageSdrs sdrs={sdrs} onClose={() => setManageOpen(false)} onChanged={loadSdrs} />}
       </div>
     </div>
   );
 }
 
-function FragmentRow({ r, others = [], d, isOpen, onToggle, onStatus, notes, setNote, saveNote, saving }: {
+// ---- SDR management (admin-only; the invite email carries the access code) --
+
+function ManageSdrs({ sdrs, onClose, onChanged }: {
+  sdrs: { id: number; name: string; email: string; active: number }[];
+  onClose: () => void; onChanged: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const invite = async () => {
+    setBusy(true); setMsg("");
+    const res = await fetch("/api/sdrs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (!res.ok) { setMsg(data.error || "invite failed"); return; }
+    setMsg(`✅ Invite emailed to ${data.email}`);
+    setName(""); setEmail("");
+    onChanged();
+  };
+
+  const act = async (id: number, action: string) => {
+    setBusy(true); setMsg("");
+    const res = await fetch("/api/sdrs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    setMsg(res.ok ? (action === "regenerate" ? "✅ New code emailed" : "✅ Done") : (data.error || "failed"));
+    onChanged();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">👥 SDR access</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✕</button>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Invites are emailed only — the access code opens the call desk (/calls) and nothing else.
+          SDRs see their assigned leads' contact surface; never scores, reasons, or the agents.
+        </p>
+
+        <div className="mt-4 flex gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name"
+            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@…"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+          <button onClick={invite} disabled={busy || !name || !email}
+            className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+            {busy ? "…" : "Invite"}
+          </button>
+        </div>
+        {msg && <p className="mt-2 text-xs text-slate-600">{msg}</p>}
+
+        <div className="mt-4 max-h-64 space-y-1.5 overflow-y-auto">
+          {sdrs.length === 0 && <p className="py-4 text-center text-xs text-slate-400">No SDRs yet — invite the first one above.</p>}
+          {sdrs.map((s) => (
+            <div key={s.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${s.active ? "border-slate-200" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-800">{s.name}{!s.active && <span className="ml-2 text-[10px] font-normal text-slate-400">deactivated</span>}</p>
+                <p className="truncate text-xs text-slate-400">{s.email}</p>
+              </div>
+              <button onClick={() => act(s.id, "regenerate")} disabled={busy}
+                className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:border-slate-400" title="Email a fresh access code (old one stops working)">
+                ↻ Resend code
+              </button>
+              {s.active ? (
+                <button onClick={() => act(s.id, "deactivate")} disabled={busy}
+                  className="rounded-md border border-red-200 px-2 py-1 text-[11px] text-red-500 hover:border-red-400" title="Locks them out immediately">
+                  Deactivate
+                </button>
+              ) : (
+                <button onClick={() => act(s.id, "activate")} disabled={busy}
+                  className="rounded-md border border-emerald-300 px-2 py-1 text-[11px] text-emerald-600">
+                  Reactivate
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onToggle, onStatus, notes, setNote, saveNote, saving }: {
   r: Row; others?: Row[]; d: number | null; isOpen: boolean;
+  assignTargets: string[]; onAssign: (who: string) => void;
   onToggle: () => void; onStatus: (s: string) => void;
   notes: string; setNote: (v: string) => void; saveNote: () => void; saving: boolean;
 }) {
@@ -502,6 +638,13 @@ function FragmentRow({ r, others = [], d, isOpen, onToggle, onStatus, notes, set
           <div className="truncate text-[11px] text-slate-400">{r.title}</div>
         </td>
         <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+          <select value={r.sdr ?? ""} onChange={(e) => onAssign(e.target.value)} disabled={saving}
+            className={`w-full rounded-md border-0 px-2 py-1 text-xs font-semibold ${r.sdr ? "bg-sky-100 text-sky-700" : "bg-red-50 text-red-500"}`}>
+            <option value="">— assign —</option>
+            {assignTargets.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </td>
+        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
           <select value={r.status} onChange={(e) => onStatus(e.target.value)} disabled={saving}
             className={`rounded-md border-0 px-2 py-1 text-xs font-semibold ${STATUS_META[r.status] ?? STATUS_META.Pending}`}>
             {STATUSES.map((x) => <option key={x} value={x}>{x}</option>)}
@@ -510,7 +653,7 @@ function FragmentRow({ r, others = [], d, isOpen, onToggle, onStatus, notes, set
       </tr>
       {isOpen && (
         <tr className="border-b border-slate-100 bg-slate-50/60">
-          <td colSpan={9} className="px-5 py-4">
+          <td colSpan={10} className="px-5 py-4">
             <div className="grid gap-4 lg:grid-cols-4">
               {/* CONTACT — exclusive panel: every contact for this role, every channel */}
               <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3">
