@@ -580,10 +580,20 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
                       <p className="flex items-center gap-1.5">
                         <span>✉</span>
                         {c.verified_email
-                          ? <button onClick={() => navigator.clipboard.writeText(c.verified_email!)}
-                              className="truncate font-semibold text-slate-800 hover:text-violet-700" title="Click to copy">
-                              {c.verified_email}
-                            </button>
+                          ? <>
+                              <button onClick={() => navigator.clipboard.writeText(c.verified_email!)}
+                                className="truncate font-semibold text-slate-800 hover:text-violet-700" title="Click to copy">
+                                {c.verified_email}
+                              </button>
+                              {c.email_1 && (
+                                <a href={`mailto:${c.verified_email}?subject=${encodeURIComponent(`your ${role(c)} opening`)}&body=${encodeURIComponent(c.email_1)}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="shrink-0 rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-violet-700"
+                                  title={`Compose to ${c.first_name} with their personalized draft`}>
+                                  ✉ compose
+                                </a>
+                              )}
+                            </>
                           : <span className="text-slate-400">no email</span>}
                       </p>
                       <p className="flex items-center gap-1.5">
