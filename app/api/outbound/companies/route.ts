@@ -18,12 +18,16 @@ export async function GET(request: NextRequest) {
 
   const days = Math.min(365, Math.max(1, Number(request.nextUrl.searchParams.get("days")) || 30));
   const cutoff = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  // market=staffing returns the staffing agent's own delivered companies —
+  // used by its ledger self-heal (rebuild the forever-unique list after any
+  // volume loss). Default remains the OTHER agents' companies (collision flag).
+  const wantStaffing = request.nextUrl.searchParams.get("market") === "staffing";
 
   const rows = getDb()
     .prepare(
       `SELECT DISTINCT company, market, MAX(queued_date) AS last_queued
        FROM research_queue
-       WHERE queued_date >= ? AND COALESCE(market, 'us') != 'staffing' AND company != ''
+       WHERE queued_date >= ? AND COALESCE(market, 'us') ${wantStaffing ? "=" : "!="} 'staffing' AND company != ''
        GROUP BY company, market`,
     )
     .all(cutoff) as { company: string; market: string; last_queued: string }[];
