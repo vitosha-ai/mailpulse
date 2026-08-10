@@ -617,6 +617,22 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Email draft (fallback)</p>
                 <p className="mt-1 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700">{r.email_1 || "—"}</p>
+                {r.email_1 && (
+                  <div className="mt-2 flex gap-2">
+                    {r.verified_email && (
+                      <a href={`mailto:${r.verified_email}?subject=${encodeURIComponent(`your ${role(r)} opening`)}&body=${encodeURIComponent(r.email_1)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700">
+                        ✉ Open in email app
+                      </a>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(r.email_1!); }}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-400"
+                      title="Copy the draft text">
+                      ⧉ Copy draft
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-3 flex items-center gap-2">

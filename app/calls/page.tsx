@@ -288,6 +288,20 @@ export default function CallsPage() {
                         <div>
                           <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Email draft</p>
                           <p className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs leading-relaxed">{l.email_1 || "—"}</p>
+                          {l.email_1 && (
+                            <div className="mt-2 flex gap-2">
+                              {l.verified_email && (
+                                <a href={`mailto:${l.verified_email}?subject=${encodeURIComponent(`your ${roleOf(l)} opening`)}&body=${encodeURIComponent(l.email_1)}`}
+                                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700">
+                                  ✉ Open in email app
+                                </a>
+                              )}
+                              <button onClick={() => navigator.clipboard.writeText(l.email_1!)}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-400">
+                                ⧉ Copy draft
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
