@@ -35,6 +35,10 @@ type Row = {
   fit_reason: string | null;
   research_trail: string | null;
   market: string | null;
+  phone: string | null;         // company switchboard
+  is_prime: number | null;      // 1 = trigger's initiative owner (call-first)
+  direct_phone: string | null;  // their direct/mobile (async reveal may fill late)
+  call_script: string | null;   // trigger-specific opener
 };
 
 const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare", staffing: "Staffing" };
@@ -1311,6 +1315,12 @@ export default function Outbound() {
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
                         {noPoc ? r.company : `${r.first_name} ${r.last_name ?? ""}`}
                       </span>
+                      {r.is_prime ? (
+                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700 ring-1 ring-amber-300"
+                          title="Prime POC — the trigger's initiative owner; call first">
+                          ⭐ prime
+                        </span>
+                      ) : null}
                       {edits[r.id] && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title="unsaved edits" />}
                       {markets.length > 1 && (
                         <span
@@ -1448,6 +1458,38 @@ export default function Outbound() {
                       </button>
                     </div>
                   </div>
+
+                  {/* PRIME POC — who actually owns this conversation (call-first).
+                      Feedback 2026-08-19: C-suite doesn't answer; the initiative
+                      owner does. Shown on the prime contact's row. */}
+                  {sel.is_prime ? (
+                    <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50/70 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                          ⭐ Prime POC — call first
+                        </p>
+                        <span className="text-sm font-bold text-slate-900">
+                          {sel.first_name} {sel.last_name} <span className="font-medium text-slate-500">· {sel.title}</span>
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                        <span>
+                          📞 {sel.direct_phone
+                            ? <a href={`tel:${sel.direct_phone}`} className="font-bold text-slate-900 hover:text-brand">{sel.direct_phone} <span className="font-normal text-emerald-600">(direct)</span></a>
+                            : sel.phone
+                              ? <a href={`tel:${sel.phone}`} className="font-semibold text-slate-700 hover:text-brand">{sel.phone} <span className="font-normal text-slate-400">(company line — direct pending)</span></a>
+                              : <span className="text-slate-400">no number yet — direct reveal pending</span>}
+                        </span>
+                        {sel.verified_email && <span className="font-mono text-xs text-slate-600">✉ {sel.verified_email}</span>}
+                      </div>
+                      {sel.call_script && (
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3">
+                          <p className="font-mono text-[9px] font-semibold uppercase tracking-widest text-slate-400">Call script</p>
+                          <p className="mt-1 text-[13px] leading-relaxed text-slate-800">{sel.call_script}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
 
                   {/* Trigger — the "why now" */}
                   <div className="mt-4 rounded-xl bg-slate-50 p-4">

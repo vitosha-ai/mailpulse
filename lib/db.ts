@@ -391,6 +391,12 @@ function migrate(db: Database.Database) {
     // and when the row last changed. updated_at is stamped by every PATCH and
     // feedback import.
     "ALTER TABLE research_queue ADD COLUMN phone TEXT", // company switchboard from Apollo org enrich
+    // Prime POC layer (owner 2026-08-19): the trigger's initiative owner for
+    // the CALL motion — direct number (Apollo phone reveal, async webhook
+    // fills late arrivals) and a per-trigger call script.
+    "ALTER TABLE research_queue ADD COLUMN is_prime INTEGER DEFAULT 0",
+    "ALTER TABLE research_queue ADD COLUMN direct_phone TEXT",
+    "ALTER TABLE research_queue ADD COLUMN call_script TEXT",
     // SDR email-OTP login: per-login one-time code (hash+expiry) and the
     // session token hash set after a successful OTP verification.
     "ALTER TABLE sdr_users ADD COLUMN otp_hash TEXT",
