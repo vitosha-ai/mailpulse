@@ -35,6 +35,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/api/login" ||
     pathname === "/api/outbound/ingest" ||
     pathname === "/api/phone-webhook" ||
+    pathname === "/api/admin/reconcile-phones" ||
     // SDR call portal: its own code-based auth (sdr_auth cookie), never the
     // admin password. The page + its API are public paths; /api/calls does
     // its own auth and serves only that SDR's limited fields.
