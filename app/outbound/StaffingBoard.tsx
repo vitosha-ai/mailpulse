@@ -26,6 +26,7 @@ type Row = {
   status: string;
   rep_notes: string | null;
   phone: string | null;      // company switchboard from Apollo org enrich
+  direct_phone: string | null; // personal/mobile (async Apollo reveal — may arrive later)
   sdr: string | null;        // owner: an invited SDR's name, or "Ajay"
   size: string | null;
   fit_reason: string | null;     // reasons; "⚠ ALSO IN B2B EMAIL PIPELINE..." prefix = collision
@@ -573,9 +574,11 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
                     <div className="mt-2 space-y-1.5 text-xs">
                       <p className="flex items-center gap-1.5">
                         <span>📞</span>
-                        {c.phone
-                          ? <a href={`tel:${c.phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{c.phone} <span className="font-normal text-slate-400">(company line)</span></a>
-                          : <span className="text-slate-400">no number on file</span>}
+                        {c.direct_phone
+                          ? <a href={`tel:${c.direct_phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{c.direct_phone} <span className="font-normal text-emerald-600">(direct)</span></a>
+                          : c.phone
+                            ? <a href={`tel:${c.phone}`} className="font-semibold text-slate-700 hover:text-brand">{c.phone} <span className="font-normal text-slate-400">(company line — direct pending)</span></a>
+                            : <span className="text-slate-400">no number on file</span>}
                       </p>
                       <p className="flex items-center gap-1.5">
                         <span>✉</span>

@@ -17,6 +17,7 @@ type Lead = {
   verified_email: string | null;
   linkedin: string | null;
   phone: string | null;
+  direct_phone: string | null; // personal/mobile (async Apollo reveal — may arrive later)
   company: string | null;
   trigger_detail: string | null; // sanitized server-side: role · days · contract · budget
   source_url: string | null;
@@ -253,9 +254,11 @@ export default function CallsPage() {
                             </p>
                             <p className="text-xs text-slate-500">{c.title}</p>
                             <div className="mt-1.5 space-y-1 text-xs">
-                              <p>📞 {c.phone
-                                ? <a href={`tel:${c.phone}`} className="font-semibold hover:text-violet-700">{c.phone} <span className="font-normal text-slate-400">(company line)</span></a>
-                                : <span className="text-slate-400">no number</span>}</p>
+                              <p>📞 {c.direct_phone
+                                ? <a href={`tel:${c.direct_phone}`} className="font-semibold hover:text-violet-700">{c.direct_phone} <span className="font-normal text-emerald-600">(direct)</span></a>
+                                : c.phone
+                                  ? <a href={`tel:${c.phone}`} className="font-semibold hover:text-violet-700">{c.phone} <span className="font-normal text-slate-400">(company line)</span></a>
+                                  : <span className="text-slate-400">no number</span>}</p>
                               <p>✉ {c.verified_email
                                 ? <>
                                     <button onClick={() => navigator.clipboard.writeText(c.verified_email!)}
