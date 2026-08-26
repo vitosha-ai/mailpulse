@@ -397,6 +397,12 @@ function migrate(db: Database.Database) {
     "ALTER TABLE research_queue ADD COLUMN is_prime INTEGER DEFAULT 0",
     "ALTER TABLE research_queue ADD COLUMN direct_phone TEXT",
     "ALTER TABLE research_queue ADD COLUMN call_script TEXT",
+    // Fix 2026-08-26: Apollo's async phone webhook payload carries ONLY its
+    // internal person id — never an email — so matching by email (the
+    // original design) silently dropped every successful reveal (50/50
+    // payloads received, 0/111 leads updated). Store the id at request time
+    // so the webhook can match on it.
+    "ALTER TABLE research_queue ADD COLUMN apollo_person_id TEXT",
     // SDR email-OTP login: per-login one-time code (hash+expiry) and the
     // session token hash set after a successful OTP verification.
     "ALTER TABLE sdr_users ADD COLUMN otp_hash TEXT",
