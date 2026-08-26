@@ -52,6 +52,12 @@ export async function POST(request: NextRequest) {
      VALUES (@queued_date, ${COLS.map((c) => "@" + c).join(", ")})`,
   );
 
+  // Race fix 2026-08-26: an Apollo phone reveal often lands in phone_lookup
+  // (via /api/phone-webhook) before this row is ever inserted — the webhook's
+  // UPDATE matches nothing in that case. Backfill direct_phone here from the
+  // durable lookup table so arrival order (webhook vs. ingest) doesn't matter.
+  const lookupStmt = db.prepare("SELECT phone FROM phone_lookup WHERE person_id = ?");
+
   let inserted = 0;
   const insertMany = db.transaction((items: Row[]) => {
     for (const r of items) {
@@ -59,6 +65,10 @@ export async function POST(request: NextRequest) {
       for (const c of COLS) rec[c] = r[c] ?? "";
       if (!rec.status) rec.status = "Pending";
       if (!rec.market) rec.market = "us"; // rows from the pre-market US agent
+      if (!rec.direct_phone && rec.apollo_person_id) {
+        const hit = lookupStmt.get(rec.apollo_person_id) as { phone: string } | undefined;
+        if (hit) rec.direct_phone = hit.phone;
+      }
       inserted += stmt.run(rec).changes;
     }
   });

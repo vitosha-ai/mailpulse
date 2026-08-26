@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { extractPhonesByPersonId } from "@/lib/phoneReveal";
 
 // Apollo phone-reveal webhook receiver. Apollo can't send our bearer header,
 // so auth = a secret `key` query param (the ingest token). POST stores the
@@ -18,34 +19,6 @@ function ensure() {
   )`);
 }
 
-// Apollo's phone-reveal webhook payload is keyed by its internal person id —
-// it never carries an email (verified live, 2026-08-26: 50/50 payloads had
-// `people[].id` + `phone_numbers[]`, zero had an email field anywhere). The
-// ORIGINAL email-matching design silently dropped every successful reveal.
-// Shape: { people: [ { id, phone_numbers: [{ sanitized_number, type_cd,
-// status_cd, confidence_cd }] } ] } — prefer a valid mobile number, else the
-// first valid number, else the first number present.
-function extractPhonesByPersonId(payload: unknown): Map<string, string> {
-  const out = new Map<string, string>();
-  const people = (payload as { people?: unknown[] })?.people;
-  if (!Array.isArray(people)) return out;
-  for (const person of people) {
-    if (!person || typeof person !== "object") continue;
-    const p = person as Record<string, unknown>;
-    const id = typeof p.id === "string" ? p.id : null;
-    const numbers = Array.isArray(p.phone_numbers) ? (p.phone_numbers as Record<string, unknown>[]) : [];
-    if (!id || numbers.length === 0) continue;
-    const pick =
-      numbers.find((n) => n.type_cd === "mobile" && n.status_cd === "valid_number") ??
-      numbers.find((n) => n.status_cd === "valid_number") ??
-      numbers[0];
-    const num = typeof pick.sanitized_number === "string" ? pick.sanitized_number
-              : typeof pick.raw_number === "string" ? pick.raw_number : null;
-    if (num) out.set(id, num);
-  }
-  return out;
-}
-
 export async function POST(request: NextRequest) {
   if (!authed(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   ensure();
@@ -56,14 +29,28 @@ export async function POST(request: NextRequest) {
   // Late-arriving direct numbers: match by Apollo person id (fixed 2026-08-26
   // — the payload has no email to match on), fill direct_phone on any lead
   // rows still missing one (prime POC layer, owner 2026-08-19).
+  //
+  // Race fix 2026-08-26: agents request the reveal early but only publish
+  // rows to MailPulse in one batch at the end of the run, so this webhook
+  // often arrives before the row exists — the UPDATE below then matches
+  // nothing and the number is lost. Every {person_id: phone} pair is also
+  // upserted into the durable phone_lookup table so /api/outbound/ingest
+  // can backfill it at row-insert time regardless of arrival order.
   let updated = 0;
   try {
     const phones = extractPhonesByPersonId(JSON.parse(body));
-    const stmt = db.prepare(
+    const updateStmt = db.prepare(
       `UPDATE research_queue SET direct_phone = ?
        WHERE apollo_person_id = ? AND COALESCE(direct_phone,'') = ''`,
     );
-    for (const [personId, phone] of phones) updated += stmt.run(phone, personId).changes;
+    const lookupStmt = db.prepare(
+      `INSERT INTO phone_lookup (person_id, phone) VALUES (?, ?)
+       ON CONFLICT(person_id) DO UPDATE SET phone = excluded.phone`,
+    );
+    for (const [personId, phone] of phones) {
+      updated += updateStmt.run(phone, personId).changes;
+      lookupStmt.run(personId, phone);
+    }
   } catch {
     // unparseable payload — raw copy is stored above either way
   }

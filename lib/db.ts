@@ -265,6 +265,20 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Fix 2026-08-26 (race condition): agents request a phone reveal early in
+    -- their run but only publish rows to MailPulse in one batch at the END
+    -- of the run. Apollo often answers within seconds — well before the row
+    -- exists — so a direct UPDATE-by-person-id matched zero rows and the
+    -- number was silently lost, with no retry. This durable, indexed table
+    -- lets /api/outbound/ingest backfill direct_phone at INSERT time for
+    -- numbers that arrived first (webhook still does the fast-path UPDATE
+    -- for numbers that arrive after the row already exists).
+    CREATE TABLE IF NOT EXISTS phone_lookup (
+      person_id TEXT PRIMARY KEY,
+      phone TEXT NOT NULL,
+      received_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Learning log: a readable feed of what each agent did (kind='auto',
     -- one digest per nightly run) and what it has learned (kind='learned',
     -- written only when the user approves an improvement in a review).
