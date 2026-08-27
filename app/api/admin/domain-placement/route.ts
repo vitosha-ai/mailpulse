@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
        FROM placement_results pr
        JOIN senders s ON s.email = pr.email
        WHERE pr.tested_at >= datetime('now', ?)
-         AND pr.id IN (
-           SELECT MAX(id) FROM placement_results GROUP BY email
+         AND pr.test_id = (
+           SELECT MAX(pr2.test_id) FROM placement_results pr2 WHERE pr2.email = pr.email
          )`,
     )
     .all(`-${days} days`) as {
