@@ -49,6 +49,16 @@ export async function POST(request: NextRequest) {
   if (!KEYS.includes(key as (typeof KEYS)[number])) {
     return NextResponse.json({ error: "unknown setting" }, { status: 400 });
   }
-  setSetting(key, (value ?? "").trim());
+  const v = (value ?? "").trim();
+  // Supabase URL/key must be plain ASCII: a pasted masked value ("sb_s••••")
+  // or a smart dash would otherwise fail deep inside fetch() with a cryptic
+  // "ByteString" error on the Apollo data page.
+  if ((key === "supabase_url" || key === "supabase_service_key") && v && !/^[!-~]+$/.test(v)) {
+    return NextResponse.json(
+      { error: "That value contains characters that can't be part of a key or URL. Use the copy button in Supabase and paste again." },
+      { status: 400 },
+    );
+  }
+  setSetting(key, v);
   return NextResponse.json({ ok: true });
 }

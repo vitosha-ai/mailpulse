@@ -22,6 +22,9 @@ function cfg() {
   const url = (getSetting("supabase_url") || "").replace(/\/+$/, "");
   const key = getSetting("supabase_service_key") || "";
   if (!url || !key) throw new VaultError(503, "Contact Vault not configured (Settings → Supabase URL + service key).");
+  if (!/^[!-~]+$/.test(key) || !/^https?:\/\/[!-~]+$/.test(url)) {
+    throw new VaultError(503, "The saved Supabase URL or key contains invalid characters. Re-paste it on the Settings page using Supabase's copy button.");
+  }
   return { url, key };
 }
 

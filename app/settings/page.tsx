@@ -65,11 +65,16 @@ export default function Settings() {
   }, []);
 
   const save = async (key: string) => {
-    await fetch("/api/settings", {
+    const r = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, value: values[key] ?? "" }),
     });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      window.alert(j.error || `Could not save (HTTP ${r.status}).`);
+      return;
+    }
     setSaved(key);
     setValues((v) => ({ ...v, [key]: "" }));
     setTimeout(() => setSaved(null), 2000);
