@@ -90,6 +90,8 @@ def campaign_rows():
                     "first_name": r.get("first_name"), "last_name": r.get("last_name"), "title": r.get("title"),
                     "company": r.get("company"), "domain": r.get("domain") or email.split("@")[1],
                     "apollo_person_id": r.get("apollo_id"),
+                    # the pull CSVs carry no location; every pull filtered on person location
+                    "country": "United Arab Emirates" if name.startswith("uae-") else "United States",
                     "source": "campaign", "campaign": f"{name} · {r.get('segment', '')}".strip(" ·"),
                     "acquired_at": acquired, "credits_est": 1,
                 }
