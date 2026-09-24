@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { upsertContacts, vaultConfigured, type ContactIn } from "@/lib/vault";
+import { rqToContact } from "@/lib/vault-agents";
 
 // POST /api/outbound/ingest — machine-to-machine intake for the Vitosha research
 // agent (a separate Railway service). Protected by a bearer token, NOT the
@@ -74,6 +76,27 @@ export async function POST(request: NextRequest) {
   });
   insertMany(rows);
 
+  // Mirror tonight's leads into the Contact Vault (Supabase) so the next
+  // campaign pull or agent run can skip them before spending a credit.
+  // Best-effort: a vault outage must never fail the agent's delivery.
+  let vaulted = 0;
+  if (vaultConfigured()) {
+    try {
+      const batch = rows
+        .map((r) => rqToContact({
+          first_name: r.first_name ?? null, last_name: r.last_name ?? null, title: r.title ?? null,
+          verified_email: r.verified_email ?? null, linkedin: r.linkedin ?? null, company: r.company ?? null,
+          size: r.size ?? null, market: r.market ?? null, trigger_type: r.trigger_type ?? null,
+          queued_date: queuedDate, direct_phone: r.direct_phone ?? null, phone: r.phone ?? null,
+          apollo_person_id: r.apollo_person_id ?? null,
+        }))
+        .filter((c): c is ContactIn => !!c);
+      if (batch.length) vaulted = (await upsertContacts(batch)).contacts;
+    } catch (e) {
+      console.error("vault mirror failed:", (e as Error).message);
+    }
+  }
+
   // Optional per-run usage/cost record (appended, one row per agent run).
   let usageRecorded = false;
   if (body.usage && typeof body.usage === "object") {
@@ -105,5 +128,5 @@ export async function POST(request: NextRequest) {
     digestRecorded = true;
   }
 
-  return NextResponse.json({ ok: true, received: rows.length, inserted, usageRecorded, digestRecorded });
+  return NextResponse.json({ ok: true, received: rows.length, inserted, vaulted, usageRecorded, digestRecorded });
 }

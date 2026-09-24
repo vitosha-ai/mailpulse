@@ -34,6 +34,16 @@ const FIELDS = [
     help: "serper.dev → Dashboard → API key. Used weekly to check where the company site and competitors rank on Google for the tracked keywords. Free tier (2,500 searches) lasts months at our volume.",
   },
   {
+    key: "supabase_url",
+    label: "Supabase project URL (Contact Vault)",
+    help: "Supabase → your project → Settings → API → Project URL (https://xxxx.supabase.co). The Contact Vault — every person Vitosha has paid Apollo for — lives in this Postgres. Run supabase/contact_vault.sql there once.",
+  },
+  {
+    key: "supabase_service_key",
+    label: "Supabase service_role key (Contact Vault)",
+    help: "Supabase → Settings → API → service_role (secret). Server-side only; it never reaches the browser.",
+  },
+  {
     key: "maildoso_api_key",
     label: "Maildoso API key (for the Inbox)",
     help: "Maildoso → Settings → API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies — warmup mail is filtered out. Easiest option; no IMAP details needed.",

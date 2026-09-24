@@ -19,6 +19,8 @@ const KEYS = [
   "seo_keywords",
   "seo_competitors",
   "seo_gsc_site",
+  "supabase_url",
+  "supabase_service_key",
 ] as const;
 
 function mask(v: string | null): string | null {
@@ -29,7 +31,7 @@ function mask(v: string | null): string | null {
 // Host/port/user aren't secrets — show them in full so they're easy to verify.
 const PLAIN = new Set([
   "imap_host", "imap_port", "imap_user", "google_domains",
-  "seo_site_url", "seo_keywords", "seo_competitors", "seo_gsc_site",
+  "seo_site_url", "seo_keywords", "seo_competitors", "seo_gsc_site", "supabase_url",
 ]);
 
 export async function GET() {

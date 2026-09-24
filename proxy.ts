@@ -34,6 +34,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/api/login" ||
     pathname === "/api/outbound/ingest" ||
+    pathname === "/api/vault/ingest" ||
+    pathname === "/api/vault/check" ||
     pathname === "/api/phone-webhook" ||
     pathname === "/api/admin/reconcile-phones" ||
     pathname === "/api/admin/phone-stats" ||
