@@ -34,7 +34,9 @@ export async function rest<T = unknown>(
     method: init.method ?? "GET",
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
+      // Legacy service_role keys are JWTs and go in Authorization too; the
+      // new sb_secret_* keys are not JWTs and are sent as apikey only.
+      ...(key.startsWith("eyJ") ? { Authorization: `Bearer ${key}` } : {}),
       "Content-Type": "application/json",
       ...(init.prefer ? { Prefer: init.prefer } : {}),
     },

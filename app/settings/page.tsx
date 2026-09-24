@@ -40,8 +40,8 @@ const FIELDS = [
   },
   {
     key: "supabase_service_key",
-    label: "Supabase service_role key (Contact Vault)",
-    help: "Supabase → Settings → API → service_role (secret). Server-side only; it never reaches the browser.",
+    label: "Supabase secret key (Contact Vault)",
+    help: "Supabase → Settings → API Keys → Secret keys → default (sb_secret_…), or the legacy service_role key — either works. Server-side only; it never reaches the browser.",
   },
   {
     key: "maildoso_api_key",
