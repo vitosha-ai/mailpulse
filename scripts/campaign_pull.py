@@ -216,7 +216,33 @@ CAMPAIGNS["d365-fo-2"] = ("d365-fo-2-campaign-apollo.csv", [
                                  "currently_using_any_of_technology_uids": ["epicor", "infor", "jd_edwards", "sage_x3",
                                                                             "syspro", "netsuite"]}),
 ])
-TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000, "d365-fo-2": 4000}
+# Smartlead draft 4129091 "Dynamics 365 Business Central 10.12.2026": "entry-level or outdated accounting
+# software" pitch. September's BC pools (50-1,000 US finance titles) are in the vault; these are the next pools.
+BC_ENTRY = ["quickbooks", "sage_50", "sage_100", "sage_300", "xero", "microsoft_dynamics_gp", "microsoft_dynamics_nav"]
+BC_NO = ["microsoft_dynamics_365", "dynamics_365", "microsoft_dynamics_365_business_central", "netsuite", "sage_intacct"]
+BC_FIN = ["CFO", "Chief Financial Officer", "Controller", "VP Finance", "Director of Finance", "Finance Manager",
+          "Accounting Manager"]
+BC_OWNER = ["COO", "VP Operations", "Director of Operations", "President", "CEO", "Owner"]
+CAMPAIGNS["bc-2"] = ("bc-2-campaign-apollo.csv", [
+    ("B1-hiring-accounting-staff", {"person_titles": BC_FIN + BC_OWNER, "organization_num_employees_ranges": ["20,500"],
+                                    "currently_using_any_of_technology_uids": BC_ENTRY,
+                                    "q_organization_job_titles": ["staff accountant", "accountant", "bookkeeper",
+                                                                  "accounts payable", "accounts receivable", "accounting manager"],
+                                    "organization_job_posted_at_range": {"min": "2026-08-12", "max": "2026-10-12"},
+                                    "currently_not_using_any_of_technology_uids": BC_NO}),
+    ("B2-canada-entry-accounting", {"person_titles": BC_FIN + BC_OWNER, "organization_num_employees_ranges": ["20,1000"],
+                                    "person_locations": ["Canada"], "organization_locations": ["Canada"],
+                                    "currently_using_any_of_technology_uids": BC_ENTRY,
+                                    "currently_not_using_any_of_technology_uids": BC_NO}),
+    ("B3-owner-ops-50-500", {"person_titles": BC_OWNER + ["Finance Manager", "Accounting Manager"],
+                             "organization_num_employees_ranges": ["50,500"],
+                             "currently_using_any_of_technology_uids": BC_ENTRY,
+                             "currently_not_using_any_of_technology_uids": BC_NO}),
+    ("B4-finance-20-49", {"person_titles": BC_FIN + ["President", "CEO", "Owner"], "organization_num_employees_ranges": ["20,49"],
+                          "currently_using_any_of_technology_uids": BC_ENTRY,
+                          "currently_not_using_any_of_technology_uids": BC_NO}),
+])
+TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000, "d365-fo-2": 4000, "bc-2": 4000}
 
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
     ("UAE-Finance", {**UAE, "person_titles": ["CFO", "Chief Financial Officer", "Finance Director", "Head of Finance",
