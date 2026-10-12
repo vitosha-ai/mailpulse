@@ -127,6 +127,25 @@ CAMPAIGNS = {
 D365_GCC = ["microsoft_dynamics_365", "dynamics_365", "microsoft_dynamics_365_finance_and_operations",
             "microsoft_dynamics_ax", "dynamics_ax", "microsoft_dynamics"]
 UAE = {"person_locations": ["United Arab Emirates"], "currently_using_any_of_technology_uids": D365_GCC}
+DATA_LEADERS = ["Chief Data Officer", "VP Data", "Head of Data", "Director of Data", "Director of Data Engineering",
+                "Head of Data Engineering", "VP Analytics", "Director of Analytics", "Head of Data Science",
+                "Director of Data Science", "Data Architect", "Director of Business Intelligence", "CTO", "CIO"]
+NA = {"person_locations": ["United States", "Canada"], "organization_locations": ["United States", "Canada"],
+      "organization_num_employees_ranges": ["200,5000"], "currently_not_using_any_of_technology_uids": ["databricks"],
+      "person_titles": DATA_LEADERS}
+# Smartlead draft 4129598 "Databricks Lakehouse: one platform..." (10.12.2026). Order = fit; file capped at 4,000.
+CAMPAIGNS["databricks-lakehouse"] = ("databricks-lakehouse-campaign-apollo.csv", [
+    ("L1-hiring-data-eng", {**NA, "q_organization_job_titles": ["data engineer", "machine learning engineer",
+                                                                 "data platform engineer", "analytics engineer"],
+                            "organization_job_posted_at_range": {"min": "2026-08-12", "max": "2026-10-12"}}),
+    ("L2-warehouse-lake-sprawl", {**NA, "currently_using_any_of_technology_uids": [
+        "amazon_redshift", "azure_synapse_analytics", "azure_synapse", "teradata", "ibm_netezza",
+        "apache_hadoop", "cloudera", "apache_hive", "oracle_exadata", "google_bigquery"]}),
+    ("L3-streaming-ml-no-lakehouse", {**NA, "currently_using_any_of_technology_uids": [
+        "apache_kafka", "apache_spark", "apache_airflow", "tensorflow", "pytorch", "amazon_sagemaker", "mlflow", "dbt"]}),
+])
+TOTAL_CAP = {"databricks-lakehouse": 4000}
+
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
     ("UAE-Finance", {**UAE, "person_titles": ["CFO", "Chief Financial Officer", "Finance Director", "Head of Finance",
                                             "Financial Controller", "VP Finance", "Group CFO", "Group Finance Director"]})])
@@ -180,13 +199,20 @@ def main():
         return
 
     new_file = not out.exists()
+    total_cap = TOTAL_CAP.get(args.campaign)
+    held = sum(1 for p in [out] if p.exists() for _ in csv.DictReader(p.open(encoding="utf-8-sig")))
     with out.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         if new_file:
             w.writeheader()
         for seg, filters in segments:
+            if total_cap and held >= total_cap:
+                print(f"{seg}: skipped, file already holds {held} (cap {total_cap})")
+                continue
             filters = dict(filters)
             cap = filters.pop("_cap", None)
+            if total_cap:
+                cap = min(cap or 10**9, total_cap - held)
             ids, total = search_ids(ap, filters, False)
             todo = [i for i in dict.fromkeys(ids) if i not in seen]
             # Ask the vault which of these people we already own — before any credit is spent.
@@ -228,6 +254,7 @@ def main():
                     }
                     w.writerow(row)
                     written += 1
+                    held += 1
                     vault_rows.append({
                         **{k: row[k] for k in ("email", "first_name", "last_name", "title", "company", "domain")},
                         "email_status": "verified", "apollo_person_id": row["apollo_id"],
