@@ -34,12 +34,25 @@ def token() -> str:
     raise SystemExit("no VAULT_TOKEN / OUTBOUND_INGEST_TOKEN")
 
 
+def clean(v):
+    """Postgres text cannot hold NUL (\u0000); a few Apollo records carry one."""
+    if isinstance(v, str):
+        return v.replace("\x00", "")
+    if isinstance(v, list):
+        return [clean(x) for x in v]
+    if isinstance(v, dict):
+        return {k: clean(x) for k, x in v.items()}
+    return v
+
+
 def post(url, tok, rows):
+    rows = clean(rows)
     for attempt in range(5):
         r = requests.post(f"{url}/api/vault/ingest", json={"rows": rows},
                           headers={"Authorization": f"Bearer {tok}"}, timeout=300)
         if r.status_code < 500:
-            r.raise_for_status()
+            if r.status_code >= 400:
+                raise SystemExit(f"ingest {r.status_code}: {r.text[:600]}")
             return r.json()
         time.sleep(5 * (attempt + 1))
     r.raise_for_status()

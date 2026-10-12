@@ -103,6 +103,14 @@ const CONTACT_COLS = new Set([
   "apollo_owner", "apollo_created_at",
 ]);
 
+// Postgres text columns reject NUL (\u0000); a few Apollo records carry one.
+function stripNul(v: unknown): unknown {
+  if (typeof v === "string") return v.replace(/\u0000/g, "");
+  if (Array.isArray(v)) return v.map(stripNul);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, stripNul(x)]));
+  return v;
+}
+
 export function keyFor(c: { email?: string | null; apollo_contact_id?: string | null }): string | null {
   const e = (c.email || "").trim().toLowerCase();
   if (e.includes("@")) return e;
@@ -135,7 +143,7 @@ export async function upsertContacts(
     };
     if (key.includes("@")) rec.email = key;
     for (const [k, v] of Object.entries(r)) {
-      if (CONTACT_COLS.has(k) && v !== undefined && v !== null && v !== "") rec[k] = v;
+      if (CONTACT_COLS.has(k) && v !== undefined && v !== null && v !== "") rec[k] = stripNul(v);
     }
     const sig = Object.keys(rec).sort().join(",");
     let g = groups.get(sig);
