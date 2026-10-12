@@ -144,7 +144,32 @@ CAMPAIGNS["databricks-lakehouse"] = ("databricks-lakehouse-campaign-apollo.csv",
     ("L3-streaming-ml-no-lakehouse", {**NA, "currently_using_any_of_technology_uids": [
         "apache_kafka", "apache_spark", "apache_airflow", "tensorflow", "pytorch", "amazon_sagemaker", "mlflow", "dbt"]}),
 ])
-TOTAL_CAP = {"databricks-lakehouse": 4000}
+# Smartlead draft 4129541 "Data & AI - Fabric" (10.12.2026). Same copy as September's Fabric
+# campaign, whose 7,676 people are in the vault and skipped; these are the NEXT pools, by fit.
+FAB_NO = ["microsoft_fabric", "databricks", "snowflake"]
+CAMPAIGNS["fabric-2"] = ("fabric-2-campaign-apollo.csv", [
+    ("F1-hiring-bi-data", {"person_titles": DATA, "organization_num_employees_ranges": ["50,5000"],
+                           "currently_using_all_of_technology_uids": ["office_365"],
+                           "q_organization_job_titles": ["power bi developer", "business intelligence developer",
+                                                         "data engineer", "analytics engineer", "data analyst"],
+                           "organization_job_posted_at_range": {"min": "2026-08-12", "max": "2026-10-12"},
+                           "currently_not_using_any_of_technology_uids": FAB_NO}),
+    ("F2-power-bi-1k-5k", {"person_titles": DATA, "organization_num_employees_ranges": ["1001,5000"],
+                           "currently_using_any_of_technology_uids": ["microsoft_power_bi", "power_bi"],
+                           "currently_not_using_any_of_technology_uids": FAB_NO}),
+    ("F3-canada-ms-data", {"person_titles": DATA, "organization_num_employees_ranges": ["50,5000"],
+                           "person_locations": ["Canada"], "organization_locations": ["Canada"],
+                           "currently_using_any_of_technology_uids": ["microsoft_power_bi", "power_bi",
+                               "sql_server_reporting_services", "microsoft_sql_server", "azure_synapse_analytics",
+                               "azure_data_factory"],
+                           "currently_not_using_any_of_technology_uids": FAB_NO}),
+    ("F4-legacy-ms-1k-5k", {"person_titles": DATA, "organization_num_employees_ranges": ["1001,5000"],
+                            "currently_using_any_of_technology_uids": ["sql_server_reporting_services",
+                                "microsoft_sql_server_reporting_services", "microsoft_sql_server", "sql_server",
+                                "azure_synapse_analytics", "azure_synapse", "azure_data_factory"],
+                            "currently_not_using_any_of_technology_uids": ["microsoft_power_bi", "power_bi"] + FAB_NO}),
+])
+TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000}
 
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
     ("UAE-Finance", {**UAE, "person_titles": ["CFO", "Chief Financial Officer", "Finance Director", "Head of Finance",
