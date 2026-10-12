@@ -194,7 +194,29 @@ CAMPAIGNS["m365-power-bi"] = ("m365-power-bi-campaign-apollo.csv", [
                          "currently_using_any_of_technology_uids": ERP_ANY,
                          "currently_not_using_any_of_technology_uids": NO_BI}),
 ])
-TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000}
+# Smartlead draft 4129359 "D365 - Finance & Operations 10.12.2026": ADOPTION pitch (finance + ops on
+# separate systems and spreadsheets). September's F&O people are in the vault and skipped.
+FO_BUYERS = ["CFO", "Chief Financial Officer", "Controller", "VP Finance", "Director of Finance", "COO", "VP Operations",
+             "Director of Operations", "VP Supply Chain", "Director of Supply Chain", "Head of Procurement",
+             "Director of Procurement", "CIO", "IT Director", "ERP Manager", "Director of Business Systems"]
+FO_NA = {"person_titles": FO_BUYERS, "person_locations": ["United States", "Canada"],
+         "organization_locations": ["United States", "Canada"],
+         "currently_not_using_any_of_technology_uids": ["microsoft_dynamics_365", "dynamics_365",
+                                                        "microsoft_dynamics_365_finance_and_operations", "microsoft_dynamics_ax"]}
+CAMPAIGNS["d365-fo-2"] = ("d365-fo-2-campaign-apollo.csv", [
+    ("O1-hiring-erp-scm-roles", {**FO_NA, "organization_num_employees_ranges": ["200,5000"],
+                                 "q_organization_job_titles": ["erp analyst", "erp business analyst", "supply chain analyst",
+                                                               "inventory analyst", "procurement specialist",
+                                                               "accounts payable specialist", "financial systems analyst"],
+                                 "organization_job_posted_at_range": {"min": "2026-08-12", "max": "2026-10-12"}}),
+    ("O2-outgrown-accounting", {**FO_NA, "organization_num_employees_ranges": ["200,5000"],
+                                "currently_using_any_of_technology_uids": ["quickbooks", "sage_50", "sage_100", "sage_300",
+                                    "sage_intacct", "microsoft_dynamics_gp", "microsoft_dynamics_nav", "xero"]}),
+    ("O3-competitor-erp-1k-5k", {**FO_NA, "organization_num_employees_ranges": ["1001,5000"],
+                                 "currently_using_any_of_technology_uids": ["epicor", "infor", "jd_edwards", "sage_x3",
+                                                                            "syspro", "netsuite"]}),
+])
+TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000, "d365-fo-2": 4000}
 
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
     ("UAE-Finance", {**UAE, "person_titles": ["CFO", "Chief Financial Officer", "Finance Director", "Head of Finance",
