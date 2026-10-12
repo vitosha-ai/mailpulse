@@ -169,7 +169,32 @@ CAMPAIGNS["fabric-2"] = ("fabric-2-campaign-apollo.csv", [
                                 "azure_synapse_analytics", "azure_synapse", "azure_data_factory"],
                             "currently_not_using_any_of_technology_uids": ["microsoft_power_bi", "power_bi"] + FAB_NO}),
 ])
-TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000}
+# Smartlead draft 4129417 "M365 - Power BI 10.12.2026": Power BI ADOPTION pitch for companies still
+# reporting by hand from spreadsheets. Buyers = the people who suffer (finance/ops) + the IT head.
+REPORT_BUYERS = ["CFO", "Chief Financial Officer", "Controller", "VP Finance", "Director of Finance", "FP&A Manager",
+                 "Director of FP&A", "VP Operations", "Director of Operations", "COO", "CIO", "IT Director",
+                 "IT Manager", "Director of Analytics"]
+NO_BI = ["microsoft_power_bi", "power_bi", "tableau", "qlik", "qlikview", "looker", "domo", "sisense", "microsoft_fabric"]
+ERP_ANY = ["microsoft_dynamics_365", "dynamics_365", "microsoft_dynamics_nav", "microsoft_dynamics_gp", "microsoft_dynamics",
+           "netsuite", "sage_intacct", "sage_100", "sage_300", "quickbooks", "epicor", "infor", "syspro"]
+CAMPAIGNS["m365-power-bi"] = ("m365-power-bi-campaign-apollo.csv", [
+    ("P1-hiring-analysts", {"person_titles": REPORT_BUYERS, "organization_num_employees_ranges": ["50,1000"],
+                            "currently_using_all_of_technology_uids": ["office_365"],
+                            "q_organization_job_titles": ["financial analyst", "business analyst", "reporting analyst",
+                                                          "data analyst", "fp&a analyst"],
+                            "organization_job_posted_at_range": {"min": "2026-08-12", "max": "2026-10-12"},
+                            "currently_not_using_any_of_technology_uids": NO_BI}),
+    ("P2-erp-no-bi", {"person_titles": REPORT_BUYERS, "organization_num_employees_ranges": ["50,1000"],
+                      "currently_using_all_of_technology_uids": ["office_365"],
+                      "currently_using_any_of_technology_uids": ERP_ANY,
+                      "currently_not_using_any_of_technology_uids": NO_BI}),
+    ("P3-canada-no-bi", {"person_titles": REPORT_BUYERS, "organization_num_employees_ranges": ["50,1000"],
+                         "person_locations": ["Canada"], "organization_locations": ["Canada"],
+                         "currently_using_all_of_technology_uids": ["office_365"],
+                         "currently_using_any_of_technology_uids": ERP_ANY,
+                         "currently_not_using_any_of_technology_uids": NO_BI}),
+])
+TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000}
 
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
     ("UAE-Finance", {**UAE, "person_titles": ["CFO", "Chief Financial Officer", "Finance Director", "Head of Finance",
