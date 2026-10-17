@@ -225,6 +225,7 @@ export default function Outbound() {
   const [q, setQ] = useState("");
   const [trigFilters, setTrigFilters] = useState<string[]>([]);
   const [showTrigMenu, setShowTrigMenu] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   // What span of days the list shows: one day (default), a rolling window,
   // everything, or a custom from/to range.
   const [viewMode, setViewMode] = useState<"day" | "7d" | "30d" | "all" | "custom">("day");
@@ -771,32 +772,33 @@ export default function Outbound() {
           </div>
         </header>
 
-        {/* Agent spend — one compact strip; expand for the full breakdown */}
+        {/* Meta line — spend + learning collapsed into two quiet pills on one
+            row (was two full-width strips stacked above the leads). */}
+        {(costs || learning.length > 0) && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            {costs && (
+              <button
+                onClick={() => setShowSpend((v) => !v)}
+                className={`rounded-full border px-3 py-1 transition ${showSpend ? "border-brand/40 bg-brand/5 text-brand" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"}`}
+              >
+                spend <b className="text-slate-800">{usd(costs.today.total_cost_usd)}</b> today
+                <span className="text-slate-400"> · {usd(costs.month.total_cost_usd)} 30d</span>
+                <span className="ml-1 text-[9px]">{showSpend ? "▴" : "▾"}</span>
+              </button>
+            )}
+            {learning.length > 0 && (
+              <button
+                onClick={() => setShowLearning((v) => !v)}
+                className={`rounded-full border px-3 py-1 transition ${showLearning ? "border-brand/40 bg-brand/5 text-brand" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"}`}
+              >
+                learning log <b className="text-slate-800">{learning.length}</b>
+                <span className="ml-1 text-[9px]">{showLearning ? "▴" : "▾"}</span>
+              </button>
+            )}
+          </div>
+        )}
         {costs && (
-          <div className="mb-4">
-            <button
-              onClick={() => setShowSpend((v) => !v)}
-              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:border-slate-300"
-            >
-              <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-600">
-                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                  Agent spend
-                </span>
-                <span>
-                  Today <b className="text-slate-900">{usd(costs.today.total_cost_usd)}</b>
-                </span>
-                <span>
-                  7d <b className="text-slate-900">{usd(costs.week.total_cost_usd)}</b>
-                </span>
-                <span>
-                  30d <b className="text-slate-900">{usd(costs.month.total_cost_usd)}</b>
-                </span>
-                <span className="hidden sm:inline text-slate-400">
-                  {compact(costs.month.apollo_credits)} Apollo credits · {compact(costs.month.anthropic_tokens)} Claude tok (30d)
-                </span>
-              </span>
-              <span className="text-[11px] font-medium text-brand">{showSpend ? "collapse ▴" : "details ▾"}</span>
-            </button>
+          <div className={showSpend ? "mb-4" : "hidden"}>
             {showSpend && (
               <div className="mt-3 space-y-3">
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -842,27 +844,9 @@ export default function Outbound() {
           </div>
         )}
 
-        {/* Learning log — what this region's agent did each night and what it
-            has learned from reviews. Collapsed to one line until opened. */}
+        {/* Learning log — expanded panel (toggle lives in the meta line above). */}
         {learning.length > 0 && (
-          <div className="mb-4">
-            <button
-              onClick={() => setShowLearning((v) => !v)}
-              className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition hover:border-slate-300"
-            >
-              <span className="flex min-w-0 items-center gap-3 text-xs text-slate-600">
-                <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                  Learning log
-                </span>
-                <span className="truncate text-slate-500">
-                  {learning[0].date} · {learning[0].entry.slice(0, 90)}
-                  {learning[0].entry.length > 90 ? "…" : ""}
-                </span>
-              </span>
-              <span className="ml-3 shrink-0 text-[11px] font-medium text-brand">
-                {showLearning ? "collapse ▴" : `${learning.length} entries ▾`}
-              </span>
-            </button>
+          <div className={showLearning ? "mb-4" : "hidden"}>
             {showLearning && (
               <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 {learning.map((e) => (
@@ -1092,31 +1076,61 @@ export default function Outbound() {
             )}
           </div>
 
-          {/* Status — multi-select: click several to combine (e.g. Pending + Verified) */}
-          <div className="flex flex-wrap gap-1.5">
+          {/* Status — compact multi-select popover (was a row of chips) */}
+          <div className="relative">
             <button
-              onClick={() => setStatusFilters([])}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${statusFilters.length === 0 ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              onClick={() => setShowStatusMenu((v) => !v)}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium shadow-sm transition ${
+                statusFilters.length
+                  ? "border-brand/50 bg-brand/5 text-brand"
+                  : "border-slate-300 bg-white text-slate-700 hover:border-brand hover:text-brand"
+              }`}
             >
-              All {total ? `· ${total}` : ""}
+              {statusFilters.length === 0
+                ? `Status${total ? ` · ${total}` : ""}`
+                : statusFilters.length === 1
+                  ? `${statusFilters[0]} · ${counts[statusFilters[0]] ?? 0}`
+                  : `${statusFilters.length} statuses`}
+              <span className="ml-1 text-[10px] text-slate-400">▾</span>
             </button>
-            {STATUSES.map((s) => {
-              if (!counts[s]) return null;
-              const on = statusFilters.includes(s);
-              return (
-                <button
-                  key={s}
-                  onClick={() =>
-                    setStatusFilters((prev) => (on ? prev.filter((x) => x !== s) : [...prev, s]))
-                  }
-                  title={on ? `Remove ${s} from filter` : `Add ${s} to filter`}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${on ? "bg-brand text-white" : "bg-white text-slate-500 border border-slate-200"}`}
-                >
-                  {s} · {counts[s]}
-                  {on && <span className="ml-1 text-[9px]">✓</span>}
-                </button>
-              );
-            })}
+            {showStatusMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowStatusMenu(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
+                  {STATUSES.map((s) => {
+                    if (!counts[s]) return null;
+                    const on = statusFilters.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() =>
+                          setStatusFilters((prev) => (on ? prev.filter((x) => x !== s) : [...prev, s]))
+                        }
+                        className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                            on ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"
+                          }`}
+                        >
+                          {on ? "✓" : ""}
+                        </span>
+                        <span className="min-w-0 flex-1">{s}</span>
+                        <span className="text-[10px] text-slate-400">{counts[s]}</span>
+                      </button>
+                    );
+                  })}
+                  {statusFilters.length > 0 && (
+                    <button
+                      onClick={() => setStatusFilters([])}
+                      className="mt-1 w-full border-t border-slate-100 px-3.5 py-2 text-left text-[11px] font-medium text-brand hover:bg-slate-50"
+                    >
+                      Clear — show all statuses
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           <span className="ml-auto hidden text-[11px] text-slate-400 lg:inline">↑↓ to move between leads</span>
         </div>
@@ -1212,9 +1226,9 @@ export default function Outbound() {
                     <option value="recent">Newest trigger</option>
                   </select>
                 </div>
-                {/* Confidence — multi-select chips (e.g. High + Medium together),
-                    plus the no-contact toggle at the end of the row */}
-                <div className="flex gap-2">
+                {/* One slim chip row: confidence + no-POC + (mixed-day) markets —
+                    was three stacked rows of boxy buttons. */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   {(["High", "Medium", "Low"] as const).map((c) => {
                     const on = confFilters.includes(c);
                     return (
@@ -1224,52 +1238,45 @@ export default function Outbound() {
                           setConfFilters((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))
                         }
                         title={on ? `Hide ${c} confidence` : `Include ${c} confidence`}
-                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium shadow-sm transition ${
+                        className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                           on
-                            ? "border-brand/50 bg-brand/5 text-brand"
+                            ? "border-brand/40 bg-brand/5 text-brand"
                             : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                         }`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${CONF_META[c].dot}`} />
                         {c}
-                        {on && <span className="text-[9px]">✓</span>}
                       </button>
                     );
                   })}
                   <button
                     onClick={() => setNoPocOnly((v) => !v)}
                     title="Only leads with no contact (manual sourcing)"
-                    className={`shrink-0 rounded-lg border px-2.5 py-2 text-xs font-medium shadow-sm transition ${
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                       noPocOnly ? "border-red-300 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                     }`}
                   >
                     no&nbsp;POC
                   </button>
-                </div>
-
-                {/* Market chips — only when this day mixes US + GCC rows */}
-                {markets.length > 1 && (
-                  <div className="flex gap-1.5">
-                    {markets.map((m) => {
+                  {markets.length > 1 &&
+                    markets.map((m) => {
                       const on = marketFilter === m;
                       return (
                         <button
                           key={m}
                           onClick={() => setMarketFilter(on ? "" : m)}
                           title={on ? "Show all markets" : `Only ${MARKET_LABELS[m] ?? m.toUpperCase()} leads`}
-                          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide shadow-sm transition ${
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
                             on
-                              ? "border-brand/50 bg-brand/5 text-brand"
+                              ? "border-brand/40 bg-brand/5 text-brand"
                               : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                           }`}
                         >
                           {MARKET_LABELS[m] ?? m.toUpperCase()}
-                          {on && <span className="text-[9px]">✓</span>}
                         </button>
                       );
                     })}
-                  </div>
-                )}
+                </div>
                 <p className="px-0.5 text-[11px] text-slate-400">
                   {visible.length} of {scopedRows.length} lead{scopedRows.length === 1 ? "" : "s"}
                   {(q || trigFilters.length > 0 || confFilters.length > 0 || noPocOnly || statusFilters.length > 0 || marketFilter) && (
@@ -1464,7 +1471,7 @@ export default function Outbound() {
                       Feedback 2026-08-19: C-suite doesn't answer; the initiative
                       owner does. Shown on the prime contact's row. */}
                   {sel.is_prime ? (
-                    <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50/70 p-4">
+                    <div className="mt-4 rounded-r-lg border-l-2 border-amber-400 bg-amber-50/40 py-3 pl-4 pr-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-700">
                           ⭐ Prime POC — call first
@@ -1484,7 +1491,7 @@ export default function Outbound() {
                         {sel.verified_email && <span className="font-mono text-xs text-slate-600">✉ {sel.verified_email}</span>}
                       </div>
                       {sel.call_script && (
-                        <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3">
+                        <div className="mt-3 rounded-md bg-white/80 p-3">
                           <p className="font-mono text-[9px] font-semibold uppercase tracking-widest text-slate-400">Call script</p>
                           <p className="mt-1 text-[13px] leading-relaxed text-slate-800">{sel.call_script}</p>
                         </div>
@@ -1494,7 +1501,7 @@ export default function Outbound() {
 
                   {/* LinkedIn motion: evidence-based connection note, ready to paste */}
                   {sel.linkedin_note ? (
-                    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                    <div className="mt-4 rounded-r-lg border-l-2 border-sky-400 bg-sky-50/40 py-3 pl-4 pr-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-sky-700">
                           in&nbsp; LinkedIn note
@@ -1525,7 +1532,7 @@ export default function Outbound() {
                   ) : null}
 
                   {/* Trigger — the "why now" */}
-                  <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                  <div className="mt-4 rounded-r-lg border-l-2 border-slate-300 bg-slate-50/60 py-3 pl-4 pr-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                         {sel.trigger_type} · {sel.trigger_date}
