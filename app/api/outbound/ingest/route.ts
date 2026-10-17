@@ -16,6 +16,7 @@ const COLS = [
   "confidence", "status", "rep_notes",
   "size", "researched_at", "fit_reason", "research_trail", "market", "phone",
   "is_prime", "direct_phone", "call_script", "apollo_person_id",
+  "linkedin_note",
 ] as const;
 
 type Row = Partial<Record<(typeof COLS)[number], string>>;

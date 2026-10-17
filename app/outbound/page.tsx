@@ -39,6 +39,7 @@ type Row = {
   is_prime: number | null;      // 1 = trigger's initiative owner (call-first)
   direct_phone: string | null;  // their direct/mobile (async reveal may fill late)
   call_script: string | null;   // trigger-specific opener
+  linkedin_note: string | null; // <=300-char connection-request note (LinkedIn motion)
 };
 
 const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare", staffing: "Staffing" };
@@ -1488,6 +1489,38 @@ export default function Outbound() {
                           <p className="mt-1 text-[13px] leading-relaxed text-slate-800">{sel.call_script}</p>
                         </div>
                       )}
+                    </div>
+                  ) : null}
+
+                  {/* LinkedIn motion: evidence-based connection note, ready to paste */}
+                  {sel.linkedin_note ? (
+                    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                          in&nbsp; LinkedIn note
+                        </p>
+                        <div className="flex items-center gap-3">
+                          {sel.linkedin ? (
+                            <a
+                              href={sel.linkedin}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-2 hover:decoration-sky-600"
+                            >
+                              open profile ↗
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard?.writeText(sel.linkedin_note || "")}
+                            className="rounded-md border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                          >
+                            copy note
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[13px] leading-relaxed text-slate-800">{sel.linkedin_note}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{(sel.linkedin_note || "").length}/300 characters — paste as the connection-request note</p>
                     </div>
                   ) : null}
 
