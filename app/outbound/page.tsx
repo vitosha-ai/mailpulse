@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
 import SeoWidget from "./SeoWidget";
 import StaffingBoard from "./StaffingBoard";
+import FederalBoard from "./FederalBoard";
 
 type Row = {
   id: number;
@@ -390,6 +391,25 @@ export default function Outbound() {
     window.history.pushState({}, "", u.toString());
   }, []);
 
+  // Federal tile counts come from the SAM.gov agent's own table, not research_queue.
+  const [fedStats, setFedStats] = useState<{ open: number; strong: number; fresh: number } | null>(null);
+  useEffect(() => {
+    if (marketScope) return;
+    fetch("/api/federal")
+      .then((r) => r.json())
+      .then((j) => {
+        const rows = (j.rows || []) as { tier: string; status: string; first_seen: string }[];
+        const today = new Date().toISOString().slice(0, 10);
+        const live = rows.filter((r) => r.status !== "No Bid");
+        setFedStats({
+          open: live.length,
+          strong: live.filter((r) => r.tier === "Strong").length,
+          fresh: rows.filter((r) => r.first_seen === today).length,
+        });
+      })
+      .catch(() => {});
+  }, [marketScope]);
+
   useEffect(() => {
     fetch("/api/outbound/costs")
       .then((r) => r.json())
@@ -640,6 +660,11 @@ export default function Outbound() {
         desc: "Scarce-skill open reqs at direct clients · 25 unique clients nightly · call-first",
         accent: "hover:border-violet-400/60 hover:shadow-violet-500/10",
       },
+      {
+        m: "federal", flag: "🏛️", name: "US Federal RFPs",
+        desc: "SAM.gov bids Vitosha can win · ranked by fit · daily Excel email",
+        accent: "hover:border-indigo-400/60 hover:shadow-indigo-500/10",
+      },
     ];
     return (
       <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
@@ -689,7 +714,25 @@ export default function Outbound() {
                   <h2 className="mt-3 text-xl font-bold text-slate-900">{t.name}</h2>
                   <p className="mt-1 text-xs text-slate-500">{t.desc}</p>
                   <div className="mt-5 flex items-center gap-2 text-sm">
-                    {n > 0 ? (
+                    {t.m === "federal" ? (
+                      fedStats && fedStats.open > 0 ? (
+                        <>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                            {fedStats.open} open
+                          </span>
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">
+                            {fedStats.strong} strong fit
+                          </span>
+                          {fedStats.fresh > 0 && (
+                            <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-700">
+                              {fedStats.fresh} new today
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-400">no opportunities pulled yet</span>
+                      )
+                    ) : n > 0 ? (
                       <>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
                           {n} lead{n === 1 ? "" : "s"} {date ? `· ${fmtDay(date)}` : ""}
@@ -721,7 +764,7 @@ export default function Outbound() {
           <SeoWidget />
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Three independent nightly agents publish here. Each has its own leads, filters and exports.
+            Four independent agents publish here. Each has its own leads, filters and exports.
           </p>
         </div>
       </div>
@@ -731,6 +774,9 @@ export default function Outbound() {
   // Staffing is role-driven, not sequence-driven — its own tabular board.
   if (scopeReady && marketScope === "staffing") {
     return <StaffingBoard onExit={exitToRegions} />;
+  }
+  if (scopeReady && marketScope === "federal") {
+    return <FederalBoard onExit={exitToRegions} />;
   }
 
   return (

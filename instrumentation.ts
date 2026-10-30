@@ -74,6 +74,30 @@ export async function register() {
   setTimeout(seoRun, 10 * 60_000); // first run 10 minutes after boot
   setInterval(seoRun, 24 * 3_600_000);
 
+  // US Federal RFP agent (SAM.gov via Apify): once a day after 11:00 UTC
+  // (~7 AM ET). Checked hourly; the date guard makes redeploys safe.
+  // Emails the ranked Excel only when new opportunities arrived.
+  // FEDERAL_DAILY=0 disables. No-op until APIFY_TOKEN is set.
+  if (process.env.FEDERAL_DAILY !== "0") {
+    const fedRun = async () => {
+      try {
+        const { getSetting, setSetting } = await import("./lib/db");
+        const { runFederal, apifyToken } = await import("./lib/federal");
+        if (!apifyToken()) return;
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        if (now.getUTCHours() < 11 || getSetting("federal_daily_date") === today) return;
+        setSetting("federal_daily_date", today); // claim the day first so a failure never loops
+        const report = await runFederal({ email: true });
+        console.log("[federal]", JSON.stringify({ ...report, newIds: report.newIds.length }));
+      } catch (e) {
+        console.error("[federal] failed:", e instanceof Error ? e.message : e);
+      }
+    };
+    setTimeout(fedRun, 6 * 60_000);
+    setInterval(fedRun, 3_600_000);
+  }
+
   setTimeout(run, 2 * 60_000); // first sync 2 minutes after boot
   setInterval(run, hours * 3_600_000);
   console.log(`[auto-sync] scheduled every ${hours}h`);
