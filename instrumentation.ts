@@ -8,8 +8,6 @@ export async function register() {
   if (!hours || Number.isNaN(hours)) return;
 
   const { fullSync } = await import("./lib/sync");
-  const { syncInbox } = await import("./lib/inbox");
-  const { syncGoogleInbox } = await import("./lib/google");
   const { pollPlacementTests, pickSendersForTest, startPlacementBatch } = await import("./lib/placement");
   const { getDb } = await import("./lib/db");
   let running = false;
@@ -92,22 +90,7 @@ export async function register() {
   setInterval(run, hours * 3_600_000);
   console.log(`[auto-sync] scheduled every ${hours}h`);
 
-  // The master inbox refreshes more often than the 4-hour fleet sync so
-  // replies show up promptly. Every 15 minutes; safe no-op until configured.
-  const inboxRun = async () => {
-    try {
-      const r = await syncInbox();
-      if (!r.startsWith("Master inbox not configured")) console.log("[inbox-sync]", r);
-    } catch (e) {
-      console.error("[inbox-sync] failed:", e instanceof Error ? e.message : e);
-    }
-    try {
-      const g = await syncGoogleInbox();
-      if (g !== "Google not configured") console.log("[google-inbox]", g);
-    } catch (e) {
-      console.error("[google-inbox] failed:", e instanceof Error ? e.message : e);
-    }
-  };
-  setTimeout(inboxRun, 90_000);
-  setInterval(inboxRun, 15 * 60_000);
+  // Inbox monitoring retired (owner 2026-10-30, "we are not monitoring inbox
+  // here"): the 15-minute master-inbox + Google pulls are disabled along with
+  // the Inbox UI. lib/inbox.ts and lib/google.ts remain for a future revival.
 }

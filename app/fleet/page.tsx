@@ -751,39 +751,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Notifications */}
-          {alerts.length > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-amber-400 bg-amber-100 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-amber-400 px-4 py-2.5 text-sm font-semibold text-amber-800">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                🔔 {alerts.length} notification{alerts.length === 1 ? "" : "s"}
-              </div>
-              <ul className="max-h-[28rem] divide-y divide-amber-100 overflow-y-auto">
-                {alerts.map((a) => (
-                  <li key={a.id} className="flex items-start justify-between gap-2 px-4 py-2.5 text-sm">
-                    <span className="text-slate-700">
-                      <span
-                        className={`mr-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
-                          a.severity === "critical"
-                            ? "bg-red-100 text-red-700 ring-1 ring-red-400"
-                            : "bg-amber-100 text-amber-700 ring-1 ring-amber-400"
-                        }`}
-                      >
-                        {a.severity}
-                      </span>
-                      {a.message}
-                    </span>
-                    <button
-                      onClick={() => resolveAlert(a.id)}
-                      className="shrink-0 font-mono text-xs text-slate-400 transition hover:text-slate-700"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Notifications panel retired (owner 2026-10-30): with the fleet in
+              migration the per-sender alert feed was 1,500+ rows of noise —
+              the Snapshot tiles above remain the health signal. */}
         </aside>
         </div>
       </div>
