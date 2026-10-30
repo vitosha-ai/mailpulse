@@ -403,7 +403,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 export async function emailDigest(newIds: string[] | null, toOverride?: string): Promise<string> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return "RESEND_API_KEY not configured";
-  const to = (toOverride || getSetting("federal_email_to") || "").split(/[,;\s]+/).filter(Boolean);
+  const to = (toOverride || emailRecipients()).split(/[,;\s]+/).filter(Boolean);
   if (to.length === 0) return "No recipient set (federal_email_to)";
 
   const rows = listOpen();
@@ -450,11 +450,17 @@ export async function emailDigest(newIds: string[] | null, toOverride?: string):
   return `sent to ${to.join(", ")}`;
 }
 
+// Default daily recipients (owner's choice 2026-10-30); editable on the board's ⚙.
+const DEFAULT_RECIPIENTS = "proposals@vitoshainc.com, ajay@vitoshainc.com";
+function emailRecipients() {
+  return getSetting("federal_email_to") || DEFAULT_RECIPIENTS;
+}
+
 export function federalConfig() {
   return {
     apify: Boolean(apifyToken()),
     resend: Boolean(process.env.RESEND_API_KEY),
-    emailTo: getSetting("federal_email_to") || "",
+    emailTo: emailRecipients(),
     lastRun: getSetting("federal_last_run"),
     lastReport: getSetting("federal_last_report"),
     lastEmail: getSetting("federal_last_email"),
