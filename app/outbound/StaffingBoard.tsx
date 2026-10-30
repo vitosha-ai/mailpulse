@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -17,7 +17,7 @@ type Row = {
   verified_email: string | null;
   linkedin: string | null;
   company: string | null;
-  trigger_detail: string | null; // "ROLE â€” open N day(s) Â· accepts contract Â· budget X Â· why"
+  trigger_detail: string | null; // "ROLE — open N day(s) · accepts contract · budget X · why"
   source_url: string | null;
   bucket: string | null;         // industry
   detected_stack: string | null; // vein label ("Dynamics 365", "PeopleSoft", ...)
@@ -26,11 +26,11 @@ type Row = {
   status: string;
   rep_notes: string | null;
   phone: string | null;      // company switchboard from Apollo org enrich
-  direct_phone: string | null; // personal/mobile (async Apollo reveal â€” may arrive later)
+  direct_phone: string | null; // personal/mobile (async Apollo reveal — may arrive later)
   sdr: string | null;        // owner: an invited SDR's name, or "Ajay"
   size: string | null;
-  fit_reason: string | null;     // reasons; "âš  ALSO IN B2B EMAIL PIPELINE..." prefix = collision
-  research_trail: string | null; // "score N Â· vein k Â· posting url"
+  fit_reason: string | null;     // reasons; "⚠ ALSO IN B2B EMAIL PIPELINE..." prefix = collision
+  research_trail: string | null; // "score N · vein k · posting url"
 };
 
 const STATUSES = ["Pending", "Called", "Emailed", "Meeting", "No Fit", "Bad Contact"] as const;
@@ -44,22 +44,22 @@ const STATUS_META: Record<string, string> = {
   "Bad Contact": "bg-red-100 text-red-700",
 };
 
-const role = (r: Row) => (r.trigger_detail || "").split(" â€” ")[0] || r.detected_stack || "";
+const role = (r: Row) => (r.trigger_detail || "").split(" — ")[0] || r.detected_stack || "";
 const daysOpen = (r: Row) => {
   const m = /open (\d+) day/.exec(r.trigger_detail || "");
   return m ? Number(m[1]) : null;
 };
 const contractOk = (r: Row) => (r.trigger_detail || "").includes("accepts contract");
 const budget = (r: Row) => {
-  const m = /budget ([^Â·]+)/.exec(r.trigger_detail || "");
+  const m = /budget ([^·]+)/.exec(r.trigger_detail || "");
   return m ? m[1].trim() : "";
 };
 const score = (r: Row) => {
   const m = /score (\d+)/.exec(r.research_trail || "");
   return m ? Number(m[1]) : 0;
 };
-const collision = (r: Row) => (r.fit_reason || "").startsWith("âš ");
-const reasons = (r: Row) => (r.fit_reason || "").replace(/^âš [^Â·]*Â·\s*/, "");
+const collision = (r: Row) => (r.fit_reason || "").startsWith("⚠");
+const reasons = (r: Row) => (r.fit_reason || "").replace(/^⚠[^·]*·\s*/, "");
 
 const scoreTone = (s: number) =>
   s >= 85 ? "bg-red-100 text-red-700" : s >= 65 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
@@ -84,7 +84,7 @@ function ManagerStrip({ all, onPickTech, unassigned }: { all: Row[]; onPickTech:
   const hotUntouched = pending.filter((r) => score(r) >= 85);
   const collisions = all.filter(collision);
   const contractReady = pending.filter(contractOk);
-  // Untouched leads older than 2 days are rotting â€” pain doesn't wait.
+  // Untouched leads older than 2 days are rotting — pain doesn't wait.
   const today = new Date().toISOString().slice(0, 10);
   const rotting = pending.filter((r) => {
     const age = (new Date(today).getTime() - new Date(r.queued_date).getTime()) / 86400_000;
@@ -98,10 +98,10 @@ function ManagerStrip({ all, onPickTech, unassigned }: { all: Row[]; onPickTech:
     { label: "Contract-ready waiting", value: contractReady.length, tone: contractReady.length ? "text-emerald-600" : "text-slate-400" },
     { label: "Rotting (2+ days idle)", value: rotting.length, tone: rotting.length ? "text-amber-600" : "text-slate-400", sub: "pain doesn't wait" },
     { label: "Meetings booked", value: meetings.length, tone: meetings.length ? "text-emerald-600" : "text-slate-400" },
-    { label: "âš  B2B collisions", value: collisions.length, tone: collisions.length ? "text-amber-600" : "text-slate-400" },
+    { label: "⚠ B2B collisions", value: collisions.length, tone: collisions.length ? "text-amber-600" : "text-slate-400" },
   ];
 
-  // Per-vein: total vs worked vs meetings â€” which tech is producing.
+  // Per-vein: total vs worked vs meetings — which tech is producing.
   const byVein = new Map<string, { total: number; worked: number; meetings: number }>();
   for (const r of all) {
     const k = r.detected_stack || "?";
@@ -127,7 +127,7 @@ function ManagerStrip({ all, onPickTech, unassigned }: { all: Row[]; onPickTech:
       </div>
       <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
         <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-500">
-          By tech Â· total / worked / <span className="text-emerald-600">meetings</span> â€” click to filter
+          By tech · total / worked / <span className="text-emerald-600">meetings</span> — click to filter
         </p>
         <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
           {veins.map(([k, v]) => (
@@ -175,7 +175,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     try {
       const saved = JSON.parse(localStorage.getItem("staffing-col-widths") || "null");
       if (Array.isArray(saved) && saved.length === COL_DEFAULTS.length) setColW(saved);
-    } catch { /* corrupt storage â€” keep defaults */ }
+    } catch { /* corrupt storage — keep defaults */ }
   }, []);
   const startResize = (i: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -207,7 +207,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     setLoading(true);
     const params = new URLSearchParams({ market: "staffing" });
     if (from || to) {
-      // Date-range mode (inclusive; either bound optional) â€” the API scopes
+      // Date-range mode (inclusive; either bound optional) — the API scopes
       // rows to the range and the day navigator is ignored.
       if (from) params.set("from", from);
       if (to) params.set("to", to);
@@ -219,7 +219,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
     setDateCounts(data.dateCounts || {});
     setDate(data.date || null);
     setLoading(false);
-    // Manager strip aggregates across ALL days (cheap: staffing is â‰¤25/day).
+    // Manager strip aggregates across ALL days (cheap: staffing is ≤25/day).
     const allRes = await fetch(`/api/outbound?market=staffing&all=1`);
     const allData = await allRes.json();
     setAllRows(allData.rows || []);
@@ -286,7 +286,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
   }, [rows, techSel, status, q, sortKey, sortDesc, owner]);
 
   // Role-driven grouping: one visual row per (company, role); extra contacts
-  // ride along and show in the expanded Contact panel. Status is per-role â€”
+  // ride along and show in the expanded Contact panel. Status is per-role —
   // changing it updates every contact row underneath.
   const groups = useMemo(() => {
     const seen = new Map<string, { main: Row; others: Row[] }>();
@@ -308,7 +308,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
       setSortDesc(true);
     }
   };
-  const arrow = (k: "score" | "days") => (sortKey === k ? (sortDesc ? " â–¼" : " â–²") : "");
+  const arrow = (k: "score" | "days") => (sortKey === k ? (sortDesc ? " ▼" : " ▲") : "");
 
   const exportCsv = () => {
     const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -320,7 +320,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
       r.title, r.verified_email, r.linkedin, r.source_url, r.status,
       collision(r) ? "Yes" : "", reasons(r),
     ].map(esc).join(","));
-    const blob = new Blob(["ï»¿" + [head.map(esc).join(","), ...lines].join("\r\n")], {
+    const blob = new Blob(["﻿" + [head.map(esc).join(","), ...lines].join("\r\n")], {
       type: "text/csv;charset=utf-8",
     });
     const a = document.createElement("a");
@@ -336,29 +336,29 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              ðŸ§‘â€ðŸ’¼ Staffing <span className="text-base font-semibold text-violet-600">Â· open roles at unique clients</span>
+              🧑‍💼 Staffing <span className="text-base font-semibold text-violet-600">· open roles at unique clients</span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
-              call-first Â· hottest pain on top Â· every company appears once, ever
+              call-first · hottest pain on top · every company appears once, ever
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={exportCsv}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
-              â¬‡ Export CSV
+              ⬇ Export CSV
             </button>
             <button onClick={onExit}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
-              â‡„ Regions
+              ⇄ Regions
             </button>
             <a href="/fleet"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
-              â† Dashboard
+              ← Dashboard
             </a>
           </div>
         </header>
 
-        {/* Manager overview â€” all days, live-updating with status changes */}
+        {/* Manager overview — all days, live-updating with status changes */}
         <ManagerStrip all={allRows} onPickTech={(t) => { setTechSel([t]); setStatus(""); }}
           unassigned={(() => {
             const seen = new Set<string>();
@@ -373,9 +373,9 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           <select value={rangeFrom || rangeTo ? "" : date ?? ""}
             onChange={(e) => { setRangeFrom(""); setRangeTo(""); load(e.target.value); }}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm">
-            {(rangeFrom || rangeTo) && <option value="">date range â†“</option>}
+            {(rangeFrom || rangeTo) && <option value="">date range ↓</option>}
             {dates.map((d) => (
-              <option key={d} value={d}>{d} Â· {dateCounts[d] ?? 0} roles</option>
+              <option key={d} value={d}>{d} · {dateCounts[d] ?? 0} roles</option>
             ))}
           </select>
           {/* Date range: set either bound; loads the API's from/to mode */}
@@ -383,26 +383,26 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             <input type="date" value={rangeFrom}
               onChange={(e) => { setRangeFrom(e.target.value); load(null, e.target.value, rangeTo); }}
               className="bg-transparent text-slate-600" title="From date" />
-            <span className="text-slate-400">â†’</span>
+            <span className="text-slate-400">→</span>
             <input type="date" value={rangeTo}
               onChange={(e) => { setRangeTo(e.target.value); load(null, rangeFrom, e.target.value); }}
               className="bg-transparent text-slate-600" title="To date" />
             {(rangeFrom || rangeTo) && (
               <button onClick={() => { setRangeFrom(""); setRangeTo(""); load(); }}
-                className="ml-1 font-bold text-slate-400 hover:text-red-500" title="Clear range">âœ•</button>
+                className="ml-1 font-bold text-slate-400 hover:text-red-500" title="Clear range">✕</button>
             )}
           </span>
           {/* Multi-select tech filter */}
           <span className="relative">
             <button onClick={() => setTechOpen((o) => !o)}
               className={`rounded-lg border px-3 py-1.5 text-sm shadow-sm transition ${techSel.length ? "border-violet-400 bg-violet-50 text-violet-700" : "border-slate-300 bg-white text-slate-600"}`}>
-              {techSel.length === 0 ? "All tech" : techSel.length === 1 ? techSel[0] : `${techSel.length} techs`} â–¾
+              {techSel.length === 0 ? "All tech" : techSel.length === 1 ? techSel[0] : `${techSel.length} techs`} ▾
             </button>
             {techOpen && (
               <span className="absolute left-0 top-full z-20 mt-1 block max-h-64 w-56 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
                 <button onClick={() => setTechSel([])}
                   className="mb-1 block w-full rounded px-2 py-1 text-left text-xs font-semibold text-slate-500 hover:bg-slate-100">
-                  Clear â€” show all
+                  Clear — show all
                 </button>
                 {techs.map((t) => (
                   <label key={t} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-violet-50">
@@ -427,9 +427,9 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
           </select>
           <a href="/outbound/team"
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 shadow-sm transition hover:border-slate-400">
-            ðŸ‘¥ Team
+            👥 Team
           </a>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="âŒ• role, company, contactâ€¦"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="⌕ role, company, contact…"
             className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm" />
           <span className="ml-auto text-xs text-slate-500">{groups.length} role(s)</span>
         </div>
@@ -455,7 +455,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
                 ].map((h, i) => (
                   <th key={i}
                     onClick={h.sort ? () => toggleSort(h.sort) : undefined}
-                    title={h.sort ? "Click to sort Â· drag edge to resize" : "Drag edge to resize"}
+                    title={h.sort ? "Click to sort · drag edge to resize" : "Drag edge to resize"}
                     className={`relative select-none px-3 py-2.5 ${h.right ? "text-right" : ""} ${h.sort ? "cursor-pointer text-violet-700 hover:text-violet-900" : ""}`}>
                     {h.label}
                     <ResizeHandle onMouseDown={(e) => startResize(i, e)} />
@@ -465,11 +465,11 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={10} className="px-3 py-10 text-center text-slate-400">Loadingâ€¦</td></tr>
+                <tr><td colSpan={10} className="px-3 py-10 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && visible.length === 0 && (
                 <tr><td colSpan={10} className="px-3 py-10 text-center text-slate-400">
-                  No roles yet â€” the agent delivers up to 25 unique clients nightly.
+                  No roles yet — the agent delivers up to 25 unique clients nightly.
                 </td></tr>
               )}
               {groups.map(({ main: r, others }) => {
@@ -493,7 +493,7 @@ export default function StaffingBoard({ onExit }: { onExit: () => void }) {
         </div>
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          âš  = this company is also in the B2B email pipeline â€” coordinate with the campaign team before calling.
+          ⚠ = this company is also in the B2B email pipeline — coordinate with the campaign team before calling.
         </p>
 
       </div>
@@ -517,7 +517,7 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
         </td>
         <td className="max-w-[240px] px-3 py-2.5">
           <div className="truncate font-semibold text-slate-800">{role(r)}</div>
-          {collision(r) && <div className="text-[10px] font-semibold text-amber-600">âš  in B2B email pipeline</div>}
+          {collision(r) && <div className="text-[10px] font-semibold text-amber-600">⚠ in B2B email pipeline</div>}
         </td>
         <td className="px-3 py-2.5">
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-700 ring-1 ring-violet-200">
@@ -526,15 +526,15 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
         </td>
         <td className="max-w-[200px] px-3 py-2.5">
           <div className="truncate font-medium text-slate-800">{r.company}</div>
-          <div className="truncate text-[11px] text-slate-400">{r.size ? `${r.size} emp` : ""}{r.bucket ? ` Â· ${r.bucket}` : ""}</div>
+          <div className="truncate text-[11px] text-slate-400">{r.size ? `${r.size} emp` : ""}{r.bucket ? ` · ${r.bucket}` : ""}</div>
         </td>
         <td className="px-3 py-2.5 text-right">
           <span className={`font-bold ${d != null && d >= 60 ? "text-red-600" : d != null && d >= 30 ? "text-amber-600" : "text-slate-600"}`}>
-            {d ?? "â€”"}
+            {d ?? "—"}
           </span>
         </td>
-        <td className="px-3 py-2.5">{contractOk(r) ? <span className="font-semibold text-emerald-600">Yes</span> : <span className="text-slate-300">â€”</span>}</td>
-        <td className="max-w-[130px] truncate px-3 py-2.5 text-slate-600">{budget(r) || <span className="text-slate-300">â€”</span>}</td>
+        <td className="px-3 py-2.5">{contractOk(r) ? <span className="font-semibold text-emerald-600">Yes</span> : <span className="text-slate-300">—</span>}</td>
+        <td className="max-w-[130px] truncate px-3 py-2.5 text-slate-600">{budget(r) || <span className="text-slate-300">—</span>}</td>
         <td className="max-w-[190px] px-3 py-2.5">
           <div className="truncate font-medium text-slate-800">
             {r.first_name ? `${r.first_name} ${r.last_name ?? ""}` : <span className="text-slate-400">(hunt on LinkedIn)</span>}
@@ -545,7 +545,7 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
         <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
           <select value={r.sdr ?? ""} onChange={(e) => onAssign(e.target.value)} disabled={saving}
             className={`w-full rounded-md border-0 px-2 py-1 text-xs font-semibold ${r.sdr ? "bg-sky-100 text-sky-700" : "bg-red-50 text-red-500"}`}>
-            <option value="">â€” assign â€”</option>
+            <option value="">— assign —</option>
             {assignTargets.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </td>
@@ -560,28 +560,28 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
         <tr className="border-b border-slate-100 bg-slate-50/60">
           <td colSpan={10} className="px-5 py-4">
             <div className="grid gap-4 lg:grid-cols-4">
-              {/* CONTACT â€” exclusive panel: every contact for this role, every channel */}
+              {/* CONTACT — exclusive panel: every contact for this role, every channel */}
               <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3">
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-violet-600">
-                  ðŸ“‡ Contact{others.length > 0 ? `s (${others.length + 1})` : ""}
+                  📇 Contact{others.length > 0 ? `s (${others.length + 1})` : ""}
                 </p>
                 {[r, ...others].map((c, i) => (
                   <div key={c.id} className={i > 0 ? "mt-3 border-t border-violet-200/70 pt-2.5" : ""}>
                     <p className="mt-1.5 text-sm font-bold text-slate-900">
-                      {c.first_name ? `${c.first_name} ${c.last_name ?? ""}` : "(no contact â€” hunt on LinkedIn)"}
+                      {c.first_name ? `${c.first_name} ${c.last_name ?? ""}` : "(no contact — hunt on LinkedIn)"}
                     </p>
                     <p className="text-xs text-slate-500">{c.title || ""}</p>
                     <div className="mt-2 space-y-1.5 text-xs">
                       <p className="flex items-center gap-1.5">
-                        <span>ðŸ“ž</span>
+                        <span>📞</span>
                         {c.direct_phone
                           ? <a href={`tel:${c.direct_phone}`} className="font-semibold text-slate-800 hover:text-violet-700">{c.direct_phone} <span className="font-normal text-emerald-600">(direct)</span></a>
                           : c.phone
-                            ? <a href={`tel:${c.phone}`} className="font-semibold text-slate-700 hover:text-brand">{c.phone} <span className="font-normal text-slate-400">(company line â€” direct pending)</span></a>
+                            ? <a href={`tel:${c.phone}`} className="font-semibold text-slate-700 hover:text-brand">{c.phone} <span className="font-normal text-slate-400">(company line — direct pending)</span></a>
                             : <span className="text-slate-400">no number on file</span>}
                       </p>
                       <p className="flex items-center gap-1.5">
-                        <span>âœ‰</span>
+                        <span>✉</span>
                         {c.verified_email
                           ? <>
                               <button onClick={() => navigator.clipboard.writeText(c.verified_email!)}
@@ -593,7 +593,7 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
                                   onClick={(e) => e.stopPropagation()}
                                   className="shrink-0 rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-violet-700"
                                   title={`Compose to ${c.first_name} with their personalized draft`}>
-                                  âœ‰ compose
+                                  ✉ compose
                                 </a>
                               )}
                             </>
@@ -615,45 +615,45 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
               </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Why this lead</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-700">{reasons(r) || "â€”"}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-700">{reasons(r) || "—"}</p>
                 {r.source_url && (
                   <a href={r.source_url.startsWith("http") ? r.source_url : `https://${r.source_url}`}
                     target="_blank" rel="noreferrer" className="mt-2 block truncate text-xs text-violet-600 underline decoration-violet-300 hover:text-violet-800">
-                    â†— View the posting (verify before calling)
+                    ↗ View the posting (verify before calling)
                   </a>
                 )}
               </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Call opener</p>
-                <p className="mt-1 whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700">{r.subject || "â€”"}</p>
+                <p className="mt-1 whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700">{r.subject || "—"}</p>
               </div>
               <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Email draft (fallback)</p>
-                <p className="mt-1 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700">{r.email_1 || "â€”"}</p>
+                <p className="mt-1 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-700">{r.email_1 || "—"}</p>
                 {r.email_1 && (
                   <div className="mt-2 flex gap-2">
                     {r.verified_email && (
                       <a href={`mailto:${r.verified_email}?subject=${encodeURIComponent(`your ${role(r)} opening`)}&body=${encodeURIComponent(r.email_1)}`}
                         onClick={(e) => e.stopPropagation()}
                         className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700">
-                        âœ‰ Open in email app
+                        ✉ Open in email app
                       </a>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(r.email_1!); }}
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-400"
                       title="Copy the draft text">
-                      â§‰ Copy draft
+                      ⧉ Copy draft
                     </button>
                   </div>
                 )}
               </div>
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <input value={notes} onChange={(e) => setNote(e.target.value)} placeholder="SDR notesâ€¦"
+              <input value={notes} onChange={(e) => setNote(e.target.value)} placeholder="SDR notes…"
                 className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs shadow-sm" />
               <button onClick={saveNote} disabled={saving}
                 className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-50">
-                {saving ? "Savingâ€¦" : "Save note"}
+                {saving ? "Saving…" : "Save note"}
               </button>
             </div>
           </td>
@@ -662,4 +662,3 @@ function FragmentRow({ r, others = [], d, isOpen, assignTargets, onAssign, onTog
     </>
   );
 }
-

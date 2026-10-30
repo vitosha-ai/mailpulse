@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
@@ -44,7 +44,7 @@ type Row = {
 
 const MARKET_LABELS: Record<string, string> = { us: "US", gcc: "GCC", healthcare: "Healthcare", staffing: "Staffing" };
 
-// Per-lead market badge colors â€” GCC stands out, US stays quiet.
+// Per-lead market badge colors — GCC stands out, US stays quiet.
 const MARKET_BADGE: Record<string, string> = {
   us: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
   gcc: "bg-teal-100 text-teal-700 ring-1 ring-teal-300",
@@ -115,20 +115,20 @@ function CostCard({ label, agg, markets }: { label: string; agg: CostAgg; market
       </div>
       <div className="mt-2 space-y-1 text-xs text-slate-600">
         <div className="flex justify-between">
-          <span>Apollo Â· {compact(agg.apollo_credits)} credits</span>
+          <span>Apollo · {compact(agg.apollo_credits)} credits</span>
           <span className="font-medium text-slate-800">{usd(agg.apollo_cost_usd)}</span>
         </div>
         <div className="flex justify-between">
-          <span>Claude Â· {compact(agg.anthropic_tokens)} tok</span>
+          <span>Claude · {compact(agg.anthropic_tokens)} tok</span>
           <span className="font-medium text-slate-800">{usd(agg.anthropic_cost_usd)}</span>
         </div>
         <div className="flex justify-between">
-          <span>Apify Â· {agg.apify_runs} runs</span>
+          <span>Apify · {agg.apify_runs} runs</span>
           <span className="font-medium text-slate-800">{usd(agg.apify_cost_usd)}</span>
         </div>
         {(agg.brightdata_records ?? 0) > 0 && (
           <div className="flex justify-between">
-            <span>LinkedIn Â· {compact(agg.brightdata_records)} rec</span>
+            <span>LinkedIn · {compact(agg.brightdata_records)} rec</span>
             <span className="font-medium text-slate-800">{usd(agg.brightdata_cost_usd)}</span>
           </div>
         )}
@@ -137,7 +137,7 @@ function CostCard({ label, agg, markets }: { label: string; agg: CostAgg; market
         <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
           {markets.map((m, i) => (
             <span key={m.market}>
-              {i > 0 && <span className="text-slate-300"> Â· </span>}
+              {i > 0 && <span className="text-slate-300"> · </span>}
               {marketLabel(m.market)} <b className="text-slate-700">{usd(m.total_cost_usd)}</b>
             </span>
           ))}
@@ -163,7 +163,7 @@ function rowsFor(text: string | null | undefined, min = 2): number {
   return Math.min(12, Math.max(min, byLength, byLines));
 }
 
-// "2026-07-16" â†’ "Thu, Jul 16" for the day navigator (ISO stays in the value).
+// "2026-07-16" → "Thu, Jul 16" for the day navigator (ISO stays in the value).
 function fmtDay(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (isNaN(d.getTime())) return iso;
@@ -539,7 +539,7 @@ export default function Outbound() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopedRows, q, statusFilters, trigFilters, confFilters, noPocOnly, marketFilter, sortBy]);
 
-  // Keep the selection inside the visible set as filters change â€” and CLEAR
+  // Keep the selection inside the visible set as filters change — and CLEAR
   // it when nothing is visible (never show another region's lead in the pane).
   useEffect(() => {
     if (visible.length) {
@@ -563,7 +563,7 @@ export default function Outbound() {
     [],
   );
 
-  // Keyboard review: â†‘/â†“ or j/k moves through the visible list; "/" jumps to search.
+  // Keyboard review: ↑/↓ or j/k moves through the visible list; "/" jumps to search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -645,23 +645,23 @@ export default function Outbound() {
       rows.filter((r) => (r.market || "us") === m && r.status === "Pending").length;
     const TILES = [
       {
-        m: "us", flag: "ðŸ‡ºðŸ‡¸", name: "US Agent",
-        desc: "United States Â· researched nightly at 1 PM ET",
+        m: "us", flag: "🇺🇸", name: "US Agent",
+        desc: "United States · researched nightly at 1 PM ET",
         accent: "hover:border-brand/50 hover:shadow-brand/10",
       },
       {
-        m: "gcc", flag: "ðŸŒ", name: "GCC Agent",
-        desc: "UAE Â· Saudi Â· Qatar Â· Kuwait Â· Bahrain Â· Oman Â· nightly at 7 AM GST",
+        m: "gcc", flag: "🌍", name: "GCC Agent",
+        desc: "UAE · Saudi · Qatar · Kuwait · Bahrain · Oman · nightly at 7 AM GST",
         accent: "hover:border-teal-400/60 hover:shadow-teal-500/10",
       },
       {
-        m: "staffing", flag: "ðŸ§‘â€ðŸ’¼", name: "Staffing Agent",
-        desc: "Scarce-skill open reqs at direct clients Â· 25 unique clients nightly Â· call-first",
+        m: "staffing", flag: "🧑‍💼", name: "Staffing Agent",
+        desc: "Scarce-skill open reqs at direct clients · 25 unique clients nightly · call-first",
         accent: "hover:border-violet-400/60 hover:shadow-violet-500/10",
       },
       {
-        m: "federal", flag: "ðŸ›ï¸", name: "US Federal RFPs",
-        desc: "SAM.gov bids Vitosha can win Â· ranked by fit Â· daily Excel email",
+        m: "federal", flag: "🏛️", name: "US Federal RFPs",
+        desc: "SAM.gov bids Vitosha can win · ranked by fit · daily Excel email",
         accent: "hover:border-indigo-400/60 hover:shadow-indigo-500/10",
       },
     ];
@@ -682,13 +682,13 @@ export default function Outbound() {
                 href="/outbound/team"
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
               >
-                ðŸ‘¥ Team
+                👥 Team
               </a>
               <a
                 href="/fleet"
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
               >
-                â† Dashboard
+                ← Dashboard
               </a>
             </div>
           </header>
@@ -728,7 +728,7 @@ export default function Outbound() {
                     ) : n > 0 ? (
                       <>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                          {n} lead{n === 1 ? "" : "s"} {date ? `Â· ${fmtDay(date)}` : ""}
+                          {n} lead{n === 1 ? "" : "s"} {date ? `· ${fmtDay(date)}` : ""}
                         </span>
                         {p > 0 && (
                           <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-700">
@@ -738,11 +738,11 @@ export default function Outbound() {
                       </>
                     ) : (
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-400">
-                        no leads yet {t.m === "gcc" ? "Â· first run tonight" : ""}
+                        no leads yet {t.m === "gcc" ? "· first run tonight" : ""}
                       </span>
                     )}
                     <span className="ml-auto font-medium text-brand opacity-0 transition group-hover:opacity-100">
-                      open â†’
+                      open →
                     </span>
                   </div>
                 </button>
@@ -750,7 +750,7 @@ export default function Outbound() {
             })}
           </div>
 
-          {/* Cold-call scoreboard â€” pushed nightly by the Zoom Phone EOD job */}
+          {/* Cold-call scoreboard — pushed nightly by the Zoom Phone EOD job */}
           <CallActivityWidget />
 
 
@@ -762,7 +762,7 @@ export default function Outbound() {
     );
   }
 
-  // Staffing is role-driven, not sequence-driven â€” its own tabular board.
+  // Staffing is role-driven, not sequence-driven — its own tabular board.
   if (scopeReady && marketScope === "staffing") {
     return <StaffingBoard onExit={exitToRegions} />;
   }
@@ -777,14 +777,14 @@ export default function Outbound() {
           <div>
             <h1 className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Outbound
-              {/* Plain text, no flag emoji â€” Windows renders ðŸ‡ºðŸ‡¸ as the letters
+              {/* Plain text, no flag emoji — Windows renders 🇺🇸 as the letters
                   "US", which doubled the label ("us US Agent"). */}
               <span className="ml-2 align-middle text-base font-semibold text-slate-500">
-                Â· {(MARKET_LABELS[marketScope] ?? marketScope.toUpperCase())} Agent
+                · {(MARKET_LABELS[marketScope] ?? marketScope.toUpperCase())} Agent
               </span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
-              triggered accounts Â· researched &amp; drafted nightly Â· you verify &amp; send
+              triggered accounts · researched &amp; drafted nightly · you verify &amp; send
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -792,18 +792,18 @@ export default function Outbound() {
               onClick={exitToRegions}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
             >
-              â‡„ Regions
+              ⇄ Regions
             </button>
             <a
               href="/fleet"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
             >
-              â† Dashboard
+              ← Dashboard
             </a>
           </div>
         </header>
 
-        {/* Meta line â€” spend + learning collapsed into two quiet pills on one
+        {/* Meta line — spend + learning collapsed into two quiet pills on one
             row (was two full-width strips stacked above the leads). */}
         {(costs || learning.length > 0) && (
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -813,8 +813,8 @@ export default function Outbound() {
                 className={`rounded-full border px-3 py-1 transition ${showSpend ? "border-brand/40 bg-brand/5 text-brand" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"}`}
               >
                 spend <b className="text-slate-800">{usd(costs.today.total_cost_usd)}</b> today
-                <span className="text-slate-400"> Â· {usd(costs.month.total_cost_usd)} 30d</span>
-                <span className="ml-1 text-[9px]">{showSpend ? "â–´" : "â–¾"}</span>
+                <span className="text-slate-400"> · {usd(costs.month.total_cost_usd)} 30d</span>
+                <span className="ml-1 text-[9px]">{showSpend ? "▴" : "▾"}</span>
               </button>
             )}
             {learning.length > 0 && (
@@ -823,7 +823,7 @@ export default function Outbound() {
                 className={`rounded-full border px-3 py-1 transition ${showLearning ? "border-brand/40 bg-brand/5 text-brand" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"}`}
               >
                 learning log <b className="text-slate-800">{learning.length}</b>
-                <span className="ml-1 text-[9px]">{showLearning ? "â–´" : "â–¾"}</span>
+                <span className="ml-1 text-[9px]">{showLearning ? "▴" : "▾"}</span>
               </button>
             )}
           </div>
@@ -851,7 +851,7 @@ export default function Outbound() {
                       {costs.daily.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-4 py-3 text-center text-slate-400">
-                            No usage recorded yet â€” appears after the agent&apos;s next run.
+                            No usage recorded yet — appears after the agent&apos;s next run.
                           </td>
                         </tr>
                       )}
@@ -866,7 +866,7 @@ export default function Outbound() {
                     </tbody>
                   </table>
                   <p className="px-4 py-2 text-[11px] text-slate-400">
-                    All-time: {usd(costs.allTime.total_cost_usd)} across {costs.allTime.runs} runs Â·
+                    All-time: {usd(costs.allTime.total_cost_usd)} across {costs.allTime.runs} runs ·
                     $ figures are estimates from metered credits/tokens at plan rates.
                   </p>
                 </div>
@@ -875,7 +875,7 @@ export default function Outbound() {
           </div>
         )}
 
-        {/* Learning log â€” expanded panel (toggle lives in the meta line above). */}
+        {/* Learning log — expanded panel (toggle lives in the meta line above). */}
         {learning.length > 0 && (
           <div className={showLearning ? "mb-4" : "hidden"}>
             {showLearning && (
@@ -902,7 +902,7 @@ export default function Outbound() {
 
         {/* Controls */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          {/* Span: one day (with â—‚ â–¸ navigation), rolling windows, all, or custom range */}
+          {/* Span: one day (with ◂ ▸ navigation), rolling windows, all, or custom range */}
           <div className="flex items-center rounded-lg border border-slate-300 bg-white shadow-sm">
             {(
               [
@@ -930,8 +930,8 @@ export default function Outbound() {
                 }`}
               >
                 {viewMode === "custom" && (viewFrom || viewTo)
-                  ? `${viewFrom || "â€¦"} â†’ ${viewTo || "â€¦"}`
-                  : "Range â–¾"}
+                  ? `${viewFrom || "…"} → ${viewTo || "…"}`
+                  : "Range ▾"}
               </button>
               {showRangeMenu && (
                 <>
@@ -946,7 +946,7 @@ export default function Outbound() {
                         onChange={(e) => setViewFrom(e.target.value)}
                         className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] text-slate-700 outline-none focus:border-brand"
                       />
-                      <span className="text-[11px] text-slate-400">â†’</span>
+                      <span className="text-[11px] text-slate-400">→</span>
                       <input
                         type="date"
                         value={viewTo}
@@ -968,16 +968,16 @@ export default function Outbound() {
             </div>
           </div>
 
-          {/* Day navigator â€” only meaningful in single-day mode */}
+          {/* Day navigator — only meaningful in single-day mode */}
           {viewMode === "day" && (
             <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white shadow-sm">
               <button
                 onClick={() => goToDate(olderDate)}
                 disabled={!olderDate}
-                title={olderDate ? `Older day Â· ${olderDate}` : "No older day"}
+                title={olderDate ? `Older day · ${olderDate}` : "No older day"}
                 className="rounded-l-lg px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
               >
-                â—‚
+                ◂
               </button>
               <div className="relative">
                 <select
@@ -988,7 +988,7 @@ export default function Outbound() {
                   {dates.length === 0 && <option value="">no queue yet</option>}
                   {dates.map((d) => (
                     <option key={d} value={d}>
-                      {fmtDay(d)} Â· {dateCounts[d] ?? 0} lead{(dateCounts[d] ?? 0) === 1 ? "" : "s"}
+                      {fmtDay(d)} · {dateCounts[d] ?? 0} lead{(dateCounts[d] ?? 0) === 1 ? "" : "s"}
                     </option>
                   ))}
                 </select>
@@ -996,15 +996,15 @@ export default function Outbound() {
               <button
                 onClick={() => goToDate(newerDate)}
                 disabled={!newerDate}
-                title={newerDate ? `Newer day Â· ${newerDate}` : "No newer day"}
+                title={newerDate ? `Newer day · ${newerDate}` : "No newer day"}
                 className="px-2.5 py-2 text-slate-500 transition hover:bg-slate-50 hover:text-brand disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
               >
-                â–¸
+                ▸
               </button>
               {dates.length > 1 && date !== dates[0] && (
                 <button
                   onClick={() => goToDate(dates[0])}
-                  title={`Jump to newest Â· ${dates[0]}`}
+                  title={`Jump to newest · ${dates[0]}`}
                   className="rounded-r-lg border-l border-slate-200 px-2.5 py-2 text-[11px] font-medium text-brand transition hover:bg-slate-50"
                 >
                   latest
@@ -1013,14 +1013,14 @@ export default function Outbound() {
             </div>
           )}
 
-          {/* Export menu â€” flexible scope Ã— format */}
+          {/* Export menu — flexible scope × format */}
           <div className="relative">
             <button
               onClick={() => setShowExport((v) => !v)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand hover:text-brand"
             >
-              <span aria-hidden>â­³</span> Export
-              <span className="text-[10px] text-slate-400">{showExport ? "â–´" : "â–¾"}</span>
+              <span aria-hidden>⭳</span> Export
+              <span className="text-[10px] text-slate-400">{showExport ? "▴" : "▾"}</span>
             </button>
             {showExport && (
               <>
@@ -1031,7 +1031,7 @@ export default function Outbound() {
                     hint={
                       viewMode === "day"
                         ? date
-                          ? `${fmtDay(date)} Â· ${dateCounts[date] ?? 0} leads`
+                          ? `${fmtDay(date)} · ${dateCounts[date] ?? 0} leads`
                           : "current day"
                         : `${scopedRows.length} leads in view span`
                     }
@@ -1054,7 +1054,7 @@ export default function Outbound() {
                     onPick={() => setShowExport(false)}
                   />
 
-                  {/* Custom date range â€” leave a bound blank for open-ended */}
+                  {/* Custom date range — leave a bound blank for open-ended */}
                   <div className="bg-slate-50/60 px-3 py-2.5">
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="text-xs font-semibold text-slate-700">Date range</span>
@@ -1068,7 +1068,7 @@ export default function Outbound() {
                         onChange={(e) => setRangeFrom(e.target.value)}
                         className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 outline-none focus:border-brand"
                       />
-                      <span className="text-[11px] text-slate-400">â†’</span>
+                      <span className="text-[11px] text-slate-400">→</span>
                       <input
                         type="date"
                         value={rangeTo}
@@ -1107,7 +1107,7 @@ export default function Outbound() {
             )}
           </div>
 
-          {/* Status â€” compact multi-select popover (was a row of chips) */}
+          {/* Status — compact multi-select popover (was a row of chips) */}
           <div className="relative">
             <button
               onClick={() => setShowStatusMenu((v) => !v)}
@@ -1118,11 +1118,11 @@ export default function Outbound() {
               }`}
             >
               {statusFilters.length === 0
-                ? `Status${total ? ` Â· ${total}` : ""}`
+                ? `Status${total ? ` · ${total}` : ""}`
                 : statusFilters.length === 1
-                  ? `${statusFilters[0]} Â· ${counts[statusFilters[0]] ?? 0}`
+                  ? `${statusFilters[0]} · ${counts[statusFilters[0]] ?? 0}`
                   : `${statusFilters.length} statuses`}
-              <span className="ml-1 text-[10px] text-slate-400">â–¾</span>
+              <span className="ml-1 text-[10px] text-slate-400">▾</span>
             </button>
             {showStatusMenu && (
               <>
@@ -1144,7 +1144,7 @@ export default function Outbound() {
                             on ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"
                           }`}
                         >
-                          {on ? "âœ“" : ""}
+                          {on ? "✓" : ""}
                         </span>
                         <span className="min-w-0 flex-1">{s}</span>
                         <span className="text-[10px] text-slate-400">{counts[s]}</span>
@@ -1156,14 +1156,14 @@ export default function Outbound() {
                       onClick={() => setStatusFilters([])}
                       className="mt-1 w-full border-t border-slate-100 px-3.5 py-2 text-left text-[11px] font-medium text-brand hover:bg-slate-50"
                     >
-                      Clear â€” show all statuses
+                      Clear — show all statuses
                     </button>
                   )}
                 </div>
               </>
             )}
           </div>
-          <span className="ml-auto hidden text-[11px] text-slate-400 lg:inline">â†‘â†“ to move between leads</span>
+          <span className="ml-auto hidden text-[11px] text-slate-400 lg:inline">↑↓ to move between leads</span>
         </div>
 
         {rows.length === 0 ? (
@@ -1184,11 +1184,11 @@ export default function Outbound() {
                   ref={searchRef}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search company, name, titleâ€¦  ( / )"
+                  placeholder="Search company, name, title…  ( / )"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/30"
                 />
                 <div className="flex gap-2">
-                  {/* Triggers â€” multi-select popover (pick several together) */}
+                  {/* Triggers — multi-select popover (pick several together) */}
                   <div className="relative min-w-0 flex-1">
                     <button
                       onClick={() => setShowTrigMenu((v) => !v)}
@@ -1203,7 +1203,7 @@ export default function Outbound() {
                         : trigFilters.length === 1
                           ? trigFilters[0]
                           : `${trigFilters.length} triggers`}
-                      <span className="float-right text-[10px] text-slate-400">â–¾</span>
+                      <span className="float-right text-[10px] text-slate-400">▾</span>
                     </button>
                     {showTrigMenu && (
                       <>
@@ -1226,7 +1226,7 @@ export default function Outbound() {
                                     on ? "border-brand bg-brand text-white" : "border-slate-300 bg-white"
                                   }`}
                                 >
-                                  {on ? "âœ“" : ""}
+                                  {on ? "✓" : ""}
                                 </span>
                                 <span className="min-w-0 flex-1 truncate">{t}</span>
                                 <span className="text-[10px] text-slate-400">
@@ -1240,7 +1240,7 @@ export default function Outbound() {
                               onClick={() => setTrigFilters([])}
                               className="mt-1 w-full border-t border-slate-100 px-3.5 py-2 text-left text-[11px] font-medium text-brand hover:bg-slate-50"
                             >
-                              Clear â€” show all triggers
+                              Clear — show all triggers
                             </button>
                           )}
                         </div>
@@ -1253,11 +1253,11 @@ export default function Outbound() {
                     className="w-[118px] shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-600 shadow-sm outline-none focus:border-brand"
                   >
                     <option value="confidence">Conf. first</option>
-                    <option value="company">Company Aâ€“Z</option>
+                    <option value="company">Company A–Z</option>
                     <option value="recent">Newest trigger</option>
                   </select>
                 </div>
-                {/* One slim chip row: confidence + no-POC + (mixed-day) markets â€”
+                {/* One slim chip row: confidence + no-POC + (mixed-day) markets —
                     was three stacked rows of boxy buttons. */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(["High", "Medium", "Low"] as const).map((c) => {
@@ -1356,8 +1356,8 @@ export default function Outbound() {
                       </span>
                       {r.is_prime ? (
                         <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700 ring-1 ring-amber-300"
-                          title="Prime POC â€” the trigger's initiative owner; call first">
-                          â­ prime
+                          title="Prime POC — the trigger's initiative owner; call first">
+                          ⭐ prime
                         </span>
                       ) : null}
                       {edits[r.id] && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title="unsaved edits" />}
@@ -1375,12 +1375,12 @@ export default function Outbound() {
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-xs text-slate-500">
                       <span className="truncate">
-                        {noPoc ? <span className="italic text-red-500">no contact â€” manual</span> : r.title}
+                        {noPoc ? <span className="italic text-red-500">no contact — manual</span> : r.title}
                       </span>
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-[11px] text-slate-400">
                       {!noPoc && <span className="truncate font-medium text-slate-600">{r.company}</span>}
-                      <span className="truncate">Â· {r.trigger_type}</span>
+                      <span className="truncate">· {r.trigger_type}</span>
                       {viewMode !== "day" && (
                         <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-500">
                           {fmtDay(r.queued_date)}
@@ -1397,7 +1397,7 @@ export default function Outbound() {
             <div
               onPointerDown={onDividerDown}
               onDoubleClick={resetPane}
-              title="Drag to resize Â· double-click to reset"
+              title="Drag to resize · double-click to reset"
               className="group hidden w-4 shrink-0 cursor-col-resize items-stretch justify-center lg:flex"
             >
               <div className="w-1 rounded-full bg-slate-200 transition group-hover:bg-brand/50 group-active:bg-brand" />
@@ -1432,10 +1432,10 @@ export default function Outbound() {
                       <p className="mt-0.5 text-sm text-slate-600">
                         {sel.first_name ? (
                           <>
-                            {sel.title} Â· <b className="text-slate-800">{sel.company}</b>
+                            {sel.title} · <b className="text-slate-800">{sel.company}</b>
                           </>
                         ) : (
-                          <span className="text-red-600">No verified contact found â€” source manually</span>
+                          <span className="text-red-600">No verified contact found — source manually</span>
                         )}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
@@ -1449,13 +1449,13 @@ export default function Outbound() {
                             rel="noreferrer"
                             className="font-medium text-brand hover:underline"
                           >
-                            LinkedIn â†—
+                            LinkedIn ↗
                           </a>
                         )}
                         <span>{sel.bucket}</span>
-                        <span>Â· {sel.pillar}</span>
-                        {sel.detected_stack && <span>Â· {sel.detected_stack}</span>}
-                        {sel.size && <span>Â· {sel.size} emp</span>}
+                        <span>· {sel.pillar}</span>
+                        {sel.detected_stack && <span>· {sel.detected_stack}</span>}
+                        {sel.size && <span>· {sel.size} emp</span>}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -1475,13 +1475,13 @@ export default function Outbound() {
                         disabled={saving === sel.id}
                         className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
                       >
-                        {saving === sel.id ? "Savingâ€¦" : selDirty ? "Save changes" : "Save"}
+                        {saving === sel.id ? "Saving…" : selDirty ? "Save changes" : "Save"}
                       </button>
                       <button
                         onClick={() => selected && copySequence(selected)}
                         className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
                       >
-                        {copied === sel.id ? "Copied âœ“" : "Copy for Smartlead"}
+                        {copied === sel.id ? "Copied ✓" : "Copy for Smartlead"}
                       </button>
                       <button
                         onClick={() => selected && save(selected, "Sent")}
@@ -1498,28 +1498,28 @@ export default function Outbound() {
                     </div>
                   </div>
 
-                  {/* PRIME POC â€” who actually owns this conversation (call-first).
+                  {/* PRIME POC — who actually owns this conversation (call-first).
                       Feedback 2026-08-19: C-suite doesn't answer; the initiative
                       owner does. Shown on the prime contact's row. */}
                   {sel.is_prime ? (
                     <div className="mt-4 rounded-r-lg border-l-2 border-amber-400 bg-amber-50/40 py-3 pl-4 pr-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-700">
-                          â­ Prime POC â€” call first
+                          ⭐ Prime POC — call first
                         </p>
                         <span className="text-sm font-bold text-slate-900">
-                          {sel.first_name} {sel.last_name} <span className="font-medium text-slate-500">Â· {sel.title}</span>
+                          {sel.first_name} {sel.last_name} <span className="font-medium text-slate-500">· {sel.title}</span>
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
                         <span>
-                          ðŸ“ž {sel.direct_phone
+                          📞 {sel.direct_phone
                             ? <a href={`tel:${sel.direct_phone}`} className="font-bold text-slate-900 hover:text-brand">{sel.direct_phone} <span className="font-normal text-emerald-600">(direct)</span></a>
                             : sel.phone
-                              ? <a href={`tel:${sel.phone}`} className="font-semibold text-slate-700 hover:text-brand">{sel.phone} <span className="font-normal text-slate-400">(company line â€” direct pending)</span></a>
-                              : <span className="text-slate-400">no number yet â€” direct reveal pending</span>}
+                              ? <a href={`tel:${sel.phone}`} className="font-semibold text-slate-700 hover:text-brand">{sel.phone} <span className="font-normal text-slate-400">(company line — direct pending)</span></a>
+                              : <span className="text-slate-400">no number yet — direct reveal pending</span>}
                         </span>
-                        {sel.verified_email && <span className="font-mono text-xs text-slate-600">âœ‰ {sel.verified_email}</span>}
+                        {sel.verified_email && <span className="font-mono text-xs text-slate-600">✉ {sel.verified_email}</span>}
                       </div>
                       {sel.call_script && (
                         <div className="mt-3 rounded-md bg-white/80 p-3">
@@ -1545,7 +1545,7 @@ export default function Outbound() {
                               rel="noreferrer"
                               className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-2 hover:decoration-sky-600"
                             >
-                              open profile â†—
+                              open profile ↗
                             </a>
                           ) : null}
                           <button
@@ -1558,15 +1558,15 @@ export default function Outbound() {
                         </div>
                       </div>
                       <p className="mt-2 text-[13px] leading-relaxed text-slate-800">{sel.linkedin_note}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">{(sel.linkedin_note || "").length}/300 characters â€” paste as the connection-request note</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{(sel.linkedin_note || "").length}/300 characters — paste as the connection-request note</p>
                     </div>
                   ) : null}
 
-                  {/* Trigger â€” the "why now" */}
+                  {/* Trigger — the "why now" */}
                   <div className="mt-4 rounded-r-lg border-l-2 border-slate-300 bg-slate-50/60 py-3 pl-4 pr-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                        {sel.trigger_type} Â· {sel.trigger_date}
+                        {sel.trigger_type} · {sel.trigger_date}
                       </p>
                       {sel.source_url ? (
                         <a
@@ -1575,10 +1575,10 @@ export default function Outbound() {
                           rel="noreferrer"
                           className="text-xs font-semibold text-brand underline decoration-brand/30 underline-offset-2 hover:decoration-brand"
                         >
-                          verify source â†—
+                          verify source ↗
                         </a>
                       ) : (
-                        <span className="text-xs font-medium text-red-600">no source URL â€” verify manually</span>
+                        <span className="text-xs font-medium text-red-600">no source URL — verify manually</span>
                       )}
                     </div>
                     <p className="mt-1.5 text-[15px] leading-relaxed text-slate-800">{sel.trigger_detail}</p>
@@ -1591,7 +1591,7 @@ export default function Outbound() {
                       onClick={() => setShowTrail((v) => !v)}
                       className="mt-2 text-[11px] font-medium text-brand hover:underline"
                     >
-                      {showTrail ? "hide research trail â–´" : "research trail â–¾"}
+                      {showTrail ? "hide research trail ▴" : "research trail ▾"}
                     </button>
                     {showTrail && sel.research_trail && (
                       <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{sel.research_trail}</p>
@@ -1600,7 +1600,7 @@ export default function Outbound() {
 
                   {selProof && (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      âš  This draft still contains a <span className="font-mono">[PROOF: â€¦]</span> token. Replace it with an
+                      ⚠ This draft still contains a <span className="font-mono">[PROOF: …]</span> token. Replace it with an
                       approved reference (or delete the sentence) before sending.
                     </div>
                   )}
@@ -1610,7 +1610,7 @@ export default function Outbound() {
                     <div className="mt-4 space-y-3">
                       <div className="flex items-baseline gap-2">
                         <p className="font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500">Sequence</p>
-                        <p className="text-[11px] text-slate-400">click any text to edit Â· Save when done</p>
+                        <p className="text-[11px] text-slate-400">click any text to edit · Save when done</p>
                       </div>
 
                       {/* Subject */}
@@ -1640,7 +1640,7 @@ export default function Outbound() {
                     </div>
                   ) : (
                     <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-5 text-center text-sm text-slate-500">
-                      No drafts yet for this lead{sel.first_name ? "" : " (no contact to write to)"} â€” it was queued
+                      No drafts yet for this lead{sel.first_name ? "" : " (no contact to write to)"} — it was queued
                       beyond the run&apos;s draft budget or has no verified contact.
                     </div>
                   )}
@@ -1664,4 +1664,3 @@ export default function Outbound() {
     </div>
   );
 }
-
