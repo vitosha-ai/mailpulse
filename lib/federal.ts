@@ -308,7 +308,9 @@ export async function runFederal(opts: { email?: boolean; postedFrom?: string } 
   setSetting("federal_last_run", new Date().toISOString());
   setSetting("federal_last_report", JSON.stringify({ ...report, newIds: report.newIds.length }));
 
-  if (opts.email && report.newIds.length > 0) {
+  // Every morning gets an email: the new ones as Excel, or a short
+  // "nothing new today" note so the team knows the agent ran.
+  if (opts.email) {
     report.emailed = await emailDigest(report.newIds);
   }
   return report;
@@ -416,9 +418,13 @@ export async function emailDigest(newIds: string[] | null, toOverride?: string):
   const date = new Date().toISOString().slice(0, 10);
   const strongNew = newRows.filter((r) => r.tier === "Strong").length;
 
-  const subject = newIds
-    ? `Federal RFPs ${date}: ${newRows.length} new (${strongNew} strong fit)`
-    : `Federal RFPs ${date}: ${rows.length} open opportunities (test)`;
+  const quiet = newIds !== null && newRows.length === 0;
+  const strongOpen = rows.filter((r) => r.tier === "Strong" && r.status !== "No Bid").length;
+  const subject = quiet
+    ? `Federal RFPs ${date}: no new opportunities today`
+    : newIds
+      ? `Federal RFPs ${date}: ${newRows.length} new (${strongNew} strong fit)`
+      : `Federal RFPs ${date}: ${rows.length} open opportunities (test)`;
   const list = highlight
     .map(
       (r) =>
@@ -426,7 +432,12 @@ export async function emailDigest(newIds: string[] | null, toOverride?: string):
         `<td style="padding:4px 8px"><a href="${esc(r.url)}">${esc(r.title)}</a><br><span style="color:#64748b;font-size:12px">${esc(r.sub_agency || r.agency)} · due ${r.due_date || "n/a"}${r.clearance ? " · " + esc(r.clearance) : ""}</span></td></tr>`,
     )
     .join("");
-  const html =
+  const quietHtml =
+    `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">` +
+    `<p>No new federal opportunities on SAM.gov since yesterday's email.</p>` +
+    `<p>${rows.length} are still open that Vitosha can bid on (${strongOpen} strong fit). They're on the US Federal RFPs board in MailPulse, and were in earlier emails.</p>` +
+    `<p style="color:#64748b;font-size:12px">— MailPulse · US Federal agent</p></div>`;
+  const html = quiet ? quietHtml :
     `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a">` +
     `<p>${newIds ? `${newRows.length} new federal opportunities since the last run.` : "Test send of the federal RFP feed."} ` +
     `${rows.length} open in total that Vitosha can bid on. The full ranked list is attached.</p>` +
@@ -442,7 +453,7 @@ export async function emailDigest(newIds: string[] | null, toOverride?: string):
       to,
       subject,
       html,
-      attachments: [{ filename: `Federal_RFPs_${date}.xlsx`, content: xlsx.toString("base64") }],
+      ...(quiet ? {} : { attachments: [{ filename: `Federal_RFPs_${date}.xlsx`, content: xlsx.toString("base64") }] }),
     }),
   });
   if (!r.ok) return `Resend ${r.status}: ${(await r.text()).slice(0, 200)}`;
