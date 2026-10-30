@@ -686,12 +686,6 @@ export default function Outbound() {
                 👥 Team
               </a>
               <a
-                href="/outbound/tracker"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
-              >
-                📋 Tracker
-              </a>
-              <a
                 href="/"
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
               >
@@ -797,12 +791,6 @@ export default function Outbound() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <a
-              href="/outbound/tracker"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
-            >
-              📋 Tracker
-            </a>
             <button
               onClick={exitToRegions}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
