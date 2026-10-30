@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -56,7 +56,7 @@ const TAG_CLS: Record<string, string> = {
   cyan: "bg-cyan-100 text-cyan-700 ring-cyan-300",
 };
 
-// "Replies" (default) shows only mail that responds to our campaigns — actual
+// "Replies" (default) shows only mail that responds to our campaigns â€” actual
 // replies plus auto-responses (OOO/bounces/opt-outs). "New threads" is the side
 // pile of fresh non-campaign mail (rarely a real prospect); "Junk" is broadcast spam.
 const CATS: { key: string; label: string }[] = [
@@ -125,7 +125,7 @@ export default function Inbox() {
   }, [load]);
 
   const sync = async () => {
-    setBusy("Reading master inbox and filtering warmup…");
+    setBusy("Reading master inbox and filtering warmupâ€¦");
     const res = await fetch("/api/inbox", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,7 +189,7 @@ export default function Inbox() {
             title={m.pinned ? "Unpin" : "Pin to top"}
             className={`mt-3 shrink-0 text-sm ${m.pinned ? "text-brand" : "text-slate-300 hover:text-slate-500"}`}
           >
-            {m.pinned ? "📌" : "📍"}
+            {m.pinned ? "ðŸ“Œ" : "ðŸ“"}
           </button>
           {/* flag */}
           <button
@@ -197,7 +197,7 @@ export default function Inbox() {
             title={m.flagged ? "Unflag" : "Flag as important"}
             className={`mt-3 shrink-0 text-sm ${m.flagged ? "text-amber-500" : "text-slate-300 hover:text-slate-500"}`}
           >
-            {m.flagged ? "★" : "☆"}
+            {m.flagged ? "â˜…" : "â˜†"}
           </button>
           <button onClick={() => openMessage(m)} className="flex min-w-0 flex-1 items-start gap-3 py-3 text-left">
             {!m.seen ? <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-brand" /> : <span className="mt-2 h-2 w-2 shrink-0" />}
@@ -240,7 +240,7 @@ export default function Inbox() {
           {/* tag + not-a-reply */}
           <span className="mt-2.5 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
             <span className="group/tag relative">
-              <button title="Add tag" className="text-xs text-slate-400 hover:text-brand">🏷</button>
+              <button title="Add tag" className="text-xs text-slate-400 hover:text-brand">ðŸ·</button>
               <span className="absolute right-0 top-5 z-10 hidden min-w-[9rem] flex-col rounded-lg border border-slate-200 bg-white p-1 shadow-lg group-hover/tag:flex">
                 {tags.map((t) => (
                   <button
@@ -249,20 +249,20 @@ export default function Inbox() {
                     className="flex items-center justify-between rounded px-2 py-1 text-left text-xs hover:bg-slate-50"
                   >
                     <span className={`rounded px-1.5 py-0.5 ring-1 ${tagCls(t.name)}`}>{t.name}</span>
-                    {m.tags.includes(t.name) && <span className="text-emerald-600">✓</span>}
+                    {m.tags.includes(t.name) && <span className="text-emerald-600">âœ“</span>}
                   </button>
                 ))}
                 <button onClick={() => createAndApplyTag(m.uid)} className="rounded px-2 py-1 text-left text-xs text-brand hover:bg-slate-50">
-                  + New tag…
+                  + New tagâ€¦
                 </button>
               </span>
             </span>
             <button
               onClick={() => act(m.uid, "mark-warmup")}
-              title="Not a real reply — hide as warmup"
+              title="Not a real reply â€” hide as warmup"
               className="text-xs text-slate-300 hover:text-red-500"
             >
-              ✕
+              âœ•
             </button>
           </span>
         </li>
@@ -277,13 +277,13 @@ export default function Inbox() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-              <span>📬</span>
+              <span>ðŸ“¬</span>
               <span className="bg-gradient-to-r from-brand via-brand-light to-brand-dark bg-clip-text text-transparent">
                 Inbox
               </span>
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
-              {meta.total} real replies · {meta.unseen} unread · {meta.warmupFiltered} warmup filtered out
+              {meta.total} real replies Â· {meta.unseen} unread Â· {meta.warmupFiltered} warmup filtered out
             </p>
           </div>
           <div className="flex gap-2">
@@ -292,10 +292,10 @@ export default function Inbox() {
               disabled={!!busy}
               className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
             >
-              ⟳ Refresh inbox
+              âŸ³ Refresh inbox
             </button>
-            <a href="/" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
-              ← Dashboard
+            <a href="/fleet" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900">
+              â† Dashboard
             </a>
           </div>
         </header>
@@ -313,7 +313,7 @@ export default function Inbox() {
           <div className="mb-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
             No replies yet. Add your <b className="text-slate-700">Maildoso API key</b> in{" "}
             <a href="/settings" className="text-brand underline">Settings</a>, then hit{" "}
-            <b className="text-slate-700">⟳ Refresh inbox</b>. Warmup emails are filtered out automatically.
+            <b className="text-slate-700">âŸ³ Refresh inbox</b>. Warmup emails are filtered out automatically.
           </div>
         )}
 
@@ -361,8 +361,8 @@ export default function Inbox() {
           {[
             { k: "", label: "Everything" },
             { k: "unseen", label: `Unread (${meta.unseen})` },
-            { k: "flagged", label: `★ Flagged (${meta.flaggedCount})` },
-            { k: "pinned", label: `📌 Pinned (${meta.pinnedCount})` },
+            { k: "flagged", label: `â˜… Flagged (${meta.flaggedCount})` },
+            { k: "pinned", label: `ðŸ“Œ Pinned (${meta.pinnedCount})` },
           ].map((f) => (
             <button
               key={f.k}
@@ -398,7 +398,7 @@ export default function Inbox() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="⌕ search sender, subject, body…"
+            placeholder="âŒ• search sender, subject, bodyâ€¦"
             className="ml-auto w-72 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand/40"
           />
         </div>
@@ -433,9 +433,9 @@ export default function Inbox() {
                 <h2 className="mt-2 text-lg font-bold text-slate-900">{open.subject || "(no subject)"}</h2>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => act(open.uid, "flag", !open.flagged)} title="Flag" className={open.flagged ? "text-amber-500" : "text-slate-300 hover:text-slate-500"}>★</button>
-                <button onClick={() => act(open.uid, "pin", !open.pinned)} title="Pin" className={open.pinned ? "text-brand" : "text-slate-300 hover:text-slate-500"}>📌</button>
-                <button onClick={() => setOpen(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+                <button onClick={() => act(open.uid, "flag", !open.flagged)} title="Flag" className={open.flagged ? "text-amber-500" : "text-slate-300 hover:text-slate-500"}>â˜…</button>
+                <button onClick={() => act(open.uid, "pin", !open.pinned)} title="Pin" className={open.pinned ? "text-brand" : "text-slate-300 hover:text-slate-500"}>ðŸ“Œ</button>
+                <button onClick={() => setOpen(null)} className="text-slate-400 hover:text-slate-700">âœ•</button>
               </div>
             </div>
             <div className="mb-4 space-y-1 border-b border-slate-200 pb-4 text-sm">
@@ -457,7 +457,7 @@ export default function Inbox() {
                     title="Remove tag"
                     className={`rounded px-1.5 py-0.5 text-xs font-semibold ring-1 ${tagCls(t)}`}
                   >
-                    {t} ✕
+                    {t} âœ•
                   </button>
                 ))}
                 {tags
@@ -486,3 +486,4 @@ export default function Inbox() {
     </div>
   );
 }
+

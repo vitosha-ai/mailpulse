@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 
@@ -6,47 +6,47 @@ const FIELDS = [
   {
     key: "instantly_api_key",
     label: "Instantly API key",
-    help: "Instantly → Settings → Integrations → API keys. Needed for warmup health scores, placement tests, and pause/resume actions.",
+    help: "Instantly â†’ Settings â†’ Integrations â†’ API keys. Needed for warmup health scores, placement tests, and pause/resume actions.",
   },
   {
     key: "saleshandy_api_key",
     label: "Saleshandy API key",
-    help: "Saleshandy → Settings → API (requires Pro plan or higher). Adds bounce rates and campaign-side scores.",
+    help: "Saleshandy â†’ Settings â†’ API (requires Pro plan or higher). Adds bounce rates and campaign-side scores.",
   },
   {
     key: "smartlead_api_key",
     label: "Smartlead API key",
-    help: "Smartlead → Settings → Smartlead API key. Brings in your Smartlead sender accounts, their warmup reputation, and — importantly — disconnect detection (Smartlead silently skips disconnected mailboxes in campaigns).",
+    help: "Smartlead â†’ Settings â†’ Smartlead API key. Brings in your Smartlead sender accounts, their warmup reputation, and â€” importantly â€” disconnect detection (Smartlead silently skips disconnected mailboxes in campaigns).",
   },
   {
     key: "trulyinbox_api_key",
     label: "TrulyInbox API key",
-    help: "TrulyInbox → API Keys tab (needs Starter plan or higher). Brings warmup deliverability scores and inbox/spam rates for the mailboxes warmed in TrulyInbox.",
+    help: "TrulyInbox â†’ API Keys tab (needs Starter plan or higher). Brings warmup deliverability scores and inbox/spam rates for the mailboxes warmed in TrulyInbox.",
   },
   {
     key: "spamhaus_dqs_key",
     label: "Spamhaus DQS key (free)",
-    help: "Sign up free at spamhaus.com → Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",
+    help: "Sign up free at spamhaus.com â†’ Data Query Service. Without it, blocklist checks may be refused by Spamhaus.",
   },
   {
     key: "serper_api_key",
     label: "Serper.dev API key (SEO watchdog)",
-    help: "serper.dev → Dashboard → API key. Used weekly to check where the company site and competitors rank on Google for the tracked keywords. Free tier (2,500 searches) lasts months at our volume.",
+    help: "serper.dev â†’ Dashboard â†’ API key. Used weekly to check where the company site and competitors rank on Google for the tracked keywords. Free tier (2,500 searches) lasts months at our volume.",
   },
   {
     key: "supabase_url",
     label: "Supabase project URL (Contact Vault)",
-    help: "Supabase → your project → Settings → API → Project URL (https://xxxx.supabase.co). The Contact Vault — every person Vitosha has paid Apollo for — lives in this Postgres. Run supabase/contact_vault.sql there once.",
+    help: "Supabase â†’ your project â†’ Settings â†’ API â†’ Project URL (https://xxxx.supabase.co). The Contact Vault â€” every person Vitosha has paid Apollo for â€” lives in this Postgres. Run supabase/contact_vault.sql there once.",
   },
   {
     key: "supabase_service_key",
     label: "Supabase secret key (Contact Vault)",
-    help: "Supabase → Settings → API Keys → Secret keys → default (sb_secret_…), or the legacy service_role key — either works. Server-side only; it never reaches the browser.",
+    help: "Supabase â†’ Settings â†’ API Keys â†’ Secret keys â†’ default (sb_secret_â€¦), or the legacy service_role key â€” either works. Server-side only; it never reaches the browser.",
   },
   {
     key: "maildoso_api_key",
     label: "Maildoso API key (for the Inbox)",
-    help: "Maildoso → Settings → API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies — warmup mail is filtered out. Easiest option; no IMAP details needed.",
+    help: "Maildoso â†’ Settings â†’ API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies â€” warmup mail is filtered out. Easiest option; no IMAP details needed.",
   },
 ] as const;
 
@@ -90,14 +90,14 @@ export default function Settings() {
               Settings
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
-              api keys · stored securely, shown masked
+              api keys Â· stored securely, shown masked
             </p>
           </div>
           <a
-            href="/"
+            href="/fleet"
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
           >
-            ← Dashboard
+            â† Dashboard
           </a>
         </header>
 
@@ -127,7 +127,7 @@ export default function Settings() {
                   type="password"
                   value={values[f.key] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  placeholder={masked[f.key] ? `Saved: ${masked[f.key]} — paste to replace` : "Paste key here"}
+                  placeholder={masked[f.key] ? `Saved: ${masked[f.key]} â€” paste to replace` : "Paste key here"}
                   className="flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
                 />
                 <button
@@ -135,7 +135,7 @@ export default function Settings() {
                   disabled={!values[f.key]}
                   className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-30"
                 >
-                  {saved === f.key ? "Saved ✓" : "Save"}
+                  {saved === f.key ? "Saved âœ“" : "Save"}
                 </button>
               </div>
             </div>
@@ -144,9 +144,9 @@ export default function Settings() {
 
         {/* Google Workspace inbox reader */}
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <label className="text-sm font-semibold text-slate-900">Google Workspace — inbox reader</label>
+          <label className="text-sm font-semibold text-slate-900">Google Workspace â€” inbox reader</label>
           {masked.google_sa_json ? (
-            <span className="ml-2 font-mono text-[11px] uppercase tracking-wider text-emerald-600">✓ configured</span>
+            <span className="ml-2 font-mono text-[11px] uppercase tracking-wider text-emerald-600">âœ“ configured</span>
           ) : null}
           <p className="mb-3 mt-1 text-xs leading-relaxed text-slate-500">
             Paste the <b>service-account JSON key</b> (the file you downloaded from Google Cloud) to read this
@@ -156,7 +156,7 @@ export default function Settings() {
           <textarea
             value={values.google_sa_json ?? ""}
             onChange={(e) => setValues((v) => ({ ...v, google_sa_json: e.target.value }))}
-            placeholder={masked.google_sa_json ? "Saved — paste new JSON to replace" : '{ "type": "service_account", "client_email": "...", "private_key": "..." }'}
+            placeholder={masked.google_sa_json ? "Saved â€” paste new JSON to replace" : '{ "type": "service_account", "client_email": "...", "private_key": "..." }'}
             rows={4}
             className="mb-2 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800 placeholder-slate-400 outline-none transition focus:border-brand focus:ring-1 focus:ring-brand/40"
           />
@@ -174,14 +174,14 @@ export default function Settings() {
               }}
               className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
             >
-              {saved === "google_domains" || saved === "google_sa_json" ? "Saved ✓" : "Save"}
+              {saved === "google_domains" || saved === "google_sa_json" ? "Saved âœ“" : "Save"}
             </button>
           </div>
         </div>
 
-        {/* SEO watchdog targets — plain-text config, editable any time */}
+        {/* SEO watchdog targets â€” plain-text config, editable any time */}
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <label className="text-sm font-semibold text-slate-900">SEO watchdog — what to track</label>
+          <label className="text-sm font-semibold text-slate-900">SEO watchdog â€” what to track</label>
           <p className="mb-3 mt-1 text-xs leading-relaxed text-slate-500">
             The company website being tracked, the Google searches that matter (one per line), and competitor
             websites to watch (one domain per line). The widget lives on the Outbound page.
@@ -215,30 +215,30 @@ export default function Settings() {
               }}
               className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand"
             >
-              {["seo_site_url", "seo_keywords", "seo_competitors"].includes(saved ?? "") ? "Saved ✓" : "Save SEO targets"}
+              {["seo_site_url", "seo_keywords", "seo_competitors"].includes(saved ?? "") ? "Saved âœ“" : "Save SEO targets"}
             </button>
           </div>
         </div>
 
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
           <p className="font-mono text-[11px] uppercase tracking-widest text-slate-400">
-            Reminder — one-time purchases
+            Reminder â€” one-time purchases
           </p>
           <ul className="mt-3 space-y-2">
             <li className="flex gap-2">
-              <span className="text-brand">›</span>
+              <span className="text-brand">â€º</span>
               <span>
-                Instantly <b className="text-slate-800">Inbox Placement add-on</b> ($47/mo, Growth tier) —
+                Instantly <b className="text-slate-800">Inbox Placement add-on</b> ($47/mo, Growth tier) â€”
                 required for the real Gmail/Microsoft placement tests. Warmup scores work without it.
               </span>
             </li>
             <li className="flex gap-2">
-              <span className="text-brand">›</span>
+              <span className="text-brand">â€º</span>
               <span>Saleshandy Pro+ plan for API access (you likely already have it).</span>
             </li>
             <li className="flex gap-2">
-              <span className="text-brand">›</span>
-              <span>Spamhaus DQS is free — just needs the signup.</span>
+              <span className="text-brand">â€º</span>
+              <span>Spamhaus DQS is free â€” just needs the signup.</span>
             </li>
           </ul>
         </div>
@@ -246,3 +246,4 @@ export default function Settings() {
     </div>
   );
 }
+

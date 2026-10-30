@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 
-// Apollo data — the Contact Vault. Every person Vitosha has paid Apollo for,
+// Apollo data â€” the Contact Vault. Every person Vitosha has paid Apollo for,
 // searchable and exportable without going back to Apollo (or paying again).
 
 type Row = {
@@ -41,7 +41,7 @@ type Filters = typeof EMPTY;
 const PAGE = 50;
 
 function n(v: number | string | null | undefined) {
-  return v == null ? "–" : Number(v).toLocaleString("en-US");
+  return v == null ? "â€“" : Number(v).toLocaleString("en-US");
 }
 function day(v: string | null) {
   return v ? v.slice(0, 10) : "";
@@ -100,7 +100,7 @@ export default function VaultPage() {
   const set = (k: keyof Filters, v: string | boolean) => setFilters((f) => ({ ...f, [k]: v }));
 
   const syncAgents = async () => {
-    setSyncMsg("Syncing agent leads…");
+    setSyncMsg("Syncing agent leadsâ€¦");
     const r = await fetch("/api/vault/sync-agents", { method: "POST" });
     const j = await r.json();
     setSyncMsg(r.ok ? `Synced ${n(j.scanned)} agent leads (${n(j.contacts)} people).` : `Sync failed: ${j.error}`);
@@ -129,7 +129,7 @@ export default function VaultPage() {
               Apollo data
             </h1>
             <p className="mt-1 font-mono text-xs uppercase tracking-[0.2em] text-slate-400">
-              contact vault · every person we have paid for · search, slice, export
+              contact vault Â· every person we have paid for Â· search, slice, export
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -139,13 +139,13 @@ export default function VaultPage() {
               title="Copy the research agents' leads (Outbound) into the vault"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900 disabled:opacity-50"
             >
-              ⟳ Sync agent leads
+              âŸ³ Sync agent leads
             </button>
             <a
-              href="/"
+              href="/fleet"
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
             >
-              ← Dashboard
+              â† Dashboard
             </a>
           </div>
         </header>
@@ -187,23 +187,23 @@ export default function VaultPage() {
                   return k ? <span key={s}>{SOURCE_LABEL[s]} <b className="text-slate-900">{n(k)}</b></span> : null;
                 })}
                 <span className="hidden sm:inline text-slate-400">
-                  ≈ {n(stats.by_source.reduce((a, r) => a + Number(r.credits_est || 0), 0))} Apollo credits (estimate: 1 per revealed email)
+                  â‰ˆ {n(stats.by_source.reduce((a, r) => a + Number(r.credits_est || 0), 0))} Apollo credits (estimate: 1 per revealed email)
                 </span>
               </span>
-              <span className="text-[11px] font-medium text-brand">{showSources ? "collapse ▴" : "details ▾"}</span>
+              <span className="text-[11px] font-medium text-brand">{showSources ? "collapse â–´" : "details â–¾"}</span>
             </button>
             {showSources && (
               <div className="mt-3 grid gap-3 lg:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:col-span-2">
                   <table className="w-full text-xs">
                     <thead className="text-left font-mono text-[10px] uppercase tracking-widest text-slate-500">
-                      <tr><th className="py-1">Source</th><th>Campaign / segment</th><th className="text-right">People</th><th className="text-right">Credits ≈</th><th className="text-right">First</th><th className="text-right">Last</th></tr>
+                      <tr><th className="py-1">Source</th><th>Campaign / segment</th><th className="text-right">People</th><th className="text-right">Credits â‰ˆ</th><th className="text-right">First</th><th className="text-right">Last</th></tr>
                     </thead>
                     <tbody>
                       {stats.by_source.map((r, i) => (
                         <tr key={i} className="border-t border-slate-100">
                           <td className="py-1">{SOURCE_LABEL[r.source] ?? r.source}</td>
-                          <td className="text-slate-600">{r.campaign || "—"}</td>
+                          <td className="text-slate-600">{r.campaign || "â€”"}</td>
                           <td className="text-right font-semibold">{n(r.n)}</td>
                           <td className="text-right">{n(r.credits_est)}</td>
                           <td className="text-right text-slate-500">{day(r.first_at)}</td>
@@ -233,8 +233,8 @@ export default function VaultPage() {
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             {input("q", "Name, email or company", "w-56")}
-            {input("title", "Title contains…")}
-            {input("company", "Company contains…")}
+            {input("title", "Title containsâ€¦")}
+            {input("company", "Company containsâ€¦")}
             {input("domain", "Domain")}
             {input("country", "Country (exact)", "w-36")}
             {input("state", "State (exact)", "w-32")}
@@ -256,7 +256,7 @@ export default function VaultPage() {
             <button onClick={apply} className="rounded-lg bg-brand px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark">Search</button>
             <button onClick={reset} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:border-slate-400">Reset</button>
             <a href={exportHref} className="ml-auto rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 shadow-sm hover:border-slate-400 hover:text-slate-900" title="Download the current filter as CSV (up to 50,000 rows)">
-              ⤓ Export CSV{total != null ? ` (${n(Math.min(total, 50000))})` : ""}
+              â¤“ Export CSV{total != null ? ` (${n(Math.min(total, 50000))})` : ""}
             </a>
           </div>
         </div>
@@ -284,7 +284,7 @@ export default function VaultPage() {
                   <td className="px-3 py-1.5 font-mono text-xs">
                     {r.email ? (
                       <span className={r.unsubscribed ? "text-red-500 line-through" : r.email_status === "verified" ? "text-emerald-700" : "text-slate-600"} title={r.unsubscribed ? "unsubscribed" : r.email_status ?? ""}>{r.email}</span>
-                    ) : <span className="text-slate-300">—</span>}
+                    ) : <span className="text-slate-300">â€”</span>}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{r.phone ?? ""}</td>
                   <td className="px-3 py-1.5 text-xs text-slate-600">{[r.city, r.state, r.country].filter(Boolean).join(", ")}</td>
@@ -298,10 +298,10 @@ export default function VaultPage() {
             </tbody>
           </table>
           <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-            <span>{loading ? "Loading…" : total != null ? `${n(offset + 1)}–${n(Math.min(offset + PAGE, total))} of ${n(total)}` : ""}</span>
+            <span>{loading ? "Loadingâ€¦" : total != null ? `${n(offset + 1)}â€“${n(Math.min(offset + PAGE, total))} of ${n(total)}` : ""}</span>
             <span className="flex gap-2">
-              <button disabled={offset === 0 || loading} onClick={() => load(applied, Math.max(0, offset - PAGE))} className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40">‹ Prev</button>
-              <button disabled={loading || (total != null && offset + PAGE >= total)} onClick={() => load(applied, offset + PAGE)} className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40">Next ›</button>
+              <button disabled={offset === 0 || loading} onClick={() => load(applied, Math.max(0, offset - PAGE))} className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40">â€¹ Prev</button>
+              <button disabled={loading || (total != null && offset + PAGE >= total)} onClick={() => load(applied, offset + PAGE)} className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40">Next â€º</button>
             </span>
           </div>
         </div>
@@ -309,3 +309,4 @@ export default function VaultPage() {
     </div>
   );
 }
+
