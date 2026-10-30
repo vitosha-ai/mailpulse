@@ -186,25 +186,8 @@ export default function Dashboard() {
     load();
   };
 
-  const runPlacement = async () => {
-    setBusy("Starting placement test batch…");
-    try {
-      const res = await fetch("/api/placement", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchSize: 50 }),
-      });
-      const data = await res.json();
-      setNotice(
-        data.ok
-          ? `Placement test started for ${data.senders} senders. Results appear after the test completes (check back in ~30 min).`
-          : `Could not start test: ${data.error}`,
-      );
-    } catch (e) {
-      setNotice(`Placement test failed: ${e instanceof Error ? e.message : e}`);
-    }
-    setBusy(null);
-  };
+  // Placement-test button retired (owner 2026-10-30) — /api/placement remains
+  // for machine use (allocator scripts) if ever needed again.
 
   const doAction = async (action: string, value?: number) => {
     const emails = [...selected];
@@ -303,13 +286,6 @@ export default function Dashboard() {
               className="rounded-lg bg-gradient-to-r from-brand to-brand-light px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-brand-dark hover:to-brand disabled:opacity-40"
             >
               ⟳ Sync now
-            </button>
-            <button
-              onClick={runPlacement}
-              disabled={!!busy}
-              className="rounded-lg border border-brand/40 bg-brand/5 px-4 py-2 text-sm font-medium text-brand transition hover:border-brand hover:bg-brand/10 disabled:opacity-40"
-            >
-              ▶ Placement test (next 50)
             </button>
             <button
               onClick={exportView}
