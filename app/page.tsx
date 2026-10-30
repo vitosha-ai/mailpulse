@@ -170,7 +170,7 @@ export default function Dashboard() {
   }, []);
 
   const runSync = async () => {
-    setBusy("Syncing with Instantly + Saleshandy + DNS — this can take a few minutes…");
+    setBusy("Syncing with Instantly + Smartlead + DNS — this can take a few minutes…");
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       const data = await res.json();
@@ -346,7 +346,7 @@ export default function Dashboard() {
         )}
 
         {/* Setup checklist — shows until everything is connected */}
-        {keys && (!keys.instantly_api_key || !keys.saleshandy_api_key || !keys.spamhaus_dqs_key || total === 0) && (
+        {keys && (!keys.instantly_api_key || !keys.spamhaus_dqs_key || total === 0) && (
           <div className="mb-6 rounded-2xl border border-brand/25 bg-brand/5 p-5">
             <p className="font-mono text-[11px] uppercase tracking-widest text-brand">
               Getting started
@@ -361,11 +361,6 @@ export default function Dashboard() {
                 done={total > 0}
                 label="Run your first sync"
                 detail="Click ⟳ Sync now (top right). Your senders appear here with scores within a few minutes."
-              />
-              <ChecklistItem
-                done={!!keys.saleshandy_api_key}
-                label="Connect Saleshandy (optional but recommended)"
-                detail="Adds bounce rates from your real campaigns — an early warning sign the warmup data can miss."
               />
               <ChecklistItem
                 done={!!keys.smartlead_api_key}
@@ -713,15 +708,9 @@ export default function Dashboard() {
                 🟢 Ready reserve
                 <span className="ml-1 font-normal text-slate-400">idle &amp; healthy</span>
               </div>
-              <div className="grid grid-cols-2 divide-x divide-slate-100">
-                <div className="p-4 text-center">
-                  <div className="text-3xl font-bold tabular-nums text-emerald-600">{snapshot.reserves.smartlead}</div>
-                  <div className="mt-1 text-xs font-medium text-slate-500">Smartlead</div>
-                </div>
-                <div className="p-4 text-center">
-                  <div className="text-3xl font-bold tabular-nums text-emerald-600">{snapshot.reserves.saleshandy}</div>
-                  <div className="mt-1 text-xs font-medium text-slate-500">Saleshandy</div>
-                </div>
+              <div className="p-4 text-center">
+                <div className="text-3xl font-bold tabular-nums text-emerald-600">{snapshot.reserves.smartlead}</div>
+                <div className="mt-1 text-xs font-medium text-slate-500">Smartlead</div>
               </div>
               <p className="border-t border-slate-100 px-4 py-2 text-[11px] leading-snug text-slate-400">
                 Green mailboxes connected to the sequencer but not yet in a campaign — capacity you can deploy.

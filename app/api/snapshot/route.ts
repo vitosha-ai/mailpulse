@@ -52,14 +52,10 @@ export async function GET() {
       count: scalar("SELECT COUNT(*) n FROM senders WHERE combined_score < 60"),
       filter: { score: "low" },
     },
-    {
-      key: "warmup-spam",
-      severity: "warn",
-      label: "Warmup drifting to spam",
-      detail: "Early warning — warmup mail creeping into spam folders.",
-      count: scalar("SELECT COUNT(*) n FROM alerts WHERE rule='warmup-spam' AND resolved_at IS NULL"),
-      filter: { status: "yellow" },
-    },
+    // "Warmup drifting to spam" tile retired (owner 2026-10-30): it counted
+    // open warmup-spam alerts from the sequencer's unused warmup module —
+    // warmup truth lives in Instantly, so the tile was standing noise (641
+    // stale alerts at removal time).
     {
       key: "no-dmarc",
       severity: "warn",
