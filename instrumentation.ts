@@ -60,19 +60,9 @@ export async function register() {
     setInterval(placementRun, 24 * 3_600_000); // then daily; the date guard makes it weekly
   }
 
-  // SEO watchdog: competitor sitemaps + Search Console daily, rankings weekly
-  // (guards live inside runSeo). Safe no-op until configured in Settings.
-  const seoRun = async () => {
-    try {
-      const { runSeo } = await import("./lib/seo");
-      const report = await runSeo();
-      console.log("[seo]", JSON.stringify(report));
-    } catch (e) {
-      console.error("[seo] failed:", e instanceof Error ? e.message : e);
-    }
-  };
-  setTimeout(seoRun, 10 * 60_000); // first run 10 minutes after boot
-  setInterval(seoRun, 24 * 3_600_000);
+  // SEO watchdog retired (owner 2026-10-30, "we are not using this"): widget
+  // removed from /outbound and the daily runSeo schedule disabled so Serper
+  // spend stops. lib/seo.ts and /api/seo remain for a future revival.
 
   // US Federal RFP agent (SAM.gov via Apify): once a day after 11:00 UTC
   // (~7 AM ET). Checked hourly; the date guard makes redeploys safe.

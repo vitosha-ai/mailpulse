@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
-import SeoWidget from "./SeoWidget";
 import StaffingBoard from "./StaffingBoard";
 import FederalBoard from "./FederalBoard";
 
@@ -754,8 +753,6 @@ export default function Outbound() {
           {/* Cold-call scoreboard — pushed nightly by the Zoom Phone EOD job */}
           <CallActivityWidget />
 
-          {/* SEO watchdog — rankings, competitor pages, Search Console */}
-          <SeoWidget />
 
           <p className="mt-6 text-center text-xs text-slate-400">
             Four independent agents publish here. Each has its own leads, filters and exports.
