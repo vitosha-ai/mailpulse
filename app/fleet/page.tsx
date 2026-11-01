@@ -165,7 +165,7 @@ export default function Dashboard() {
   }, []);
 
   const runSync = async () => {
-    setBusy("Syncing with Instantly + Smartlead + DNS — this can take a few minutes…");
+    setBusy("Syncing with Smartlead + DNS — this can take a few minutes…");
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       const data = await res.json();
@@ -330,26 +330,21 @@ export default function Dashboard() {
         )}
 
         {/* Setup checklist — shows until everything is connected */}
-        {keys && (!keys.instantly_api_key || !keys.spamhaus_dqs_key || total === 0) && (
+        {keys && (!keys.smartlead_api_key || !keys.spamhaus_dqs_key || total === 0) && (
           <div className="mb-6 rounded-2xl border border-brand/25 bg-brand/5 p-5">
             <p className="font-mono text-[11px] uppercase tracking-widest text-brand">
               Getting started
             </p>
             <ul className="mt-3 space-y-2 text-sm">
               <ChecklistItem
-                done={!!keys.instantly_api_key}
-                label="Connect Instantly"
-                detail="Paste your Instantly API key in Settings — this brings in all your mailboxes and their warmup health scores."
+                done={!!keys.smartlead_api_key}
+                label="Connect Smartlead"
+                detail="Brings in your senders, their warmup reputation and connection state — Smartlead is now the single platform for sending AND warmup."
               />
               <ChecklistItem
                 done={total > 0}
                 label="Run your first sync"
                 detail="Click ⟳ Sync now (top right). Your senders appear here with scores within a few minutes."
-              />
-              <ChecklistItem
-                done={!!keys.smartlead_api_key}
-                label="Connect Smartlead (if you use it)"
-                detail="Brings in your Smartlead senders and alerts you when one silently disconnects — Smartlead skips those in campaigns without telling you."
               />
               <ChecklistItem
                 done={!!keys.trulyinbox_api_key}

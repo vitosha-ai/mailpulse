@@ -1,5 +1,4 @@
 import { getDb } from "./db";
-import { listAllAccounts, warmupAnalytics } from "./instantly";
 import {
   listAllAccounts as listSmartleadAccounts,
   listCampaigns,
@@ -36,82 +35,13 @@ function logSync(kind: string, ok: boolean, detail: string) {
     .run(kind, ok ? 1 : 0, detail);
 }
 
+// Instantly retired (owner 2026-11-01, subscription cancelled): warmup now
+// runs natively in Smartlead for every account; placement testing (which ran
+// through Instantly) is disabled. warmup_daily / placement_* tables remain as
+// history. Smartlead's warmup reputation (sl_warmup_reputation, synced below)
+// is the live warmup signal.
 export async function syncInstantly(): Promise<string> {
-  const db = getDb();
-  try {
-    const accounts = await listAllAccounts();
-    // NOTE: Instantly is warmup/testing only — campaigns send via Smartlead/
-    // Saleshandy, so Instantly's daily_limit is deliberately NOT stored; the
-    // sequencer syncs own the daily_limit column.
-    const upsert = db.prepare(`
-      INSERT INTO senders (email, domain, provider, instantly_status, warmup_status, warmup_score, last_synced)
-      VALUES (@email, @domain, @provider, @instantly_status, @warmup_status, @warmup_score, datetime('now'))
-      ON CONFLICT(email) DO UPDATE SET
-        domain = excluded.domain,
-        provider = excluded.provider,
-        instantly_status = excluded.instantly_status,
-        warmup_status = excluded.warmup_status,
-        warmup_score = excluded.warmup_score,
-        last_synced = excluded.last_synced
-    `);
-    const providerFromCode = (code: number): string =>
-      code === 2 ? "google" : code === 3 ? "microsoft" : code === 1 ? "maildoso" : "other";
-
-    const tx = db.transaction(() => {
-      for (const a of accounts) {
-        upsert.run({
-          email: a.email.toLowerCase(),
-          domain: domainOf(a.email),
-          provider: providerFromCode(a.provider_code),
-          instantly_status: a.status,
-          warmup_status: a.warmup_status,
-          warmup_score: a.stat_warmup_score,
-        });
-      }
-    });
-    tx();
-
-    // Warmup analytics in batches of 100 (API max).
-    const emails = accounts.map((a) => a.email.toLowerCase());
-    const insertDay = db.prepare(`
-      INSERT INTO warmup_daily (email, date, sent, landed_inbox, landed_spam, received)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(email, date) DO UPDATE SET
-        sent = excluded.sent, landed_inbox = excluded.landed_inbox,
-        landed_spam = excluded.landed_spam, received = excluded.received
-    `);
-    const setScore = db.prepare("UPDATE senders SET warmup_score = ? WHERE email = ?");
-
-    for (let i = 0; i < emails.length; i += 100) {
-      const batch = emails.slice(i, i + 100);
-      const analytics = await warmupAnalytics(batch);
-      const tx2 = db.transaction(() => {
-        for (const [email, days] of Object.entries(analytics.email_date_data ?? {})) {
-          for (const [date, d] of Object.entries(days)) {
-            insertDay.run(
-              email.toLowerCase(),
-              date.slice(0, 10),
-              d.sent ?? 0,
-              d.landed_inbox ?? 0,
-              d.landed_spam ?? 0,
-              d.received ?? 0,
-            );
-          }
-        }
-        for (const [email, agg] of Object.entries(analytics.aggregate_data ?? {})) {
-          if (typeof agg.health_score === "number") setScore.run(agg.health_score, email.toLowerCase());
-        }
-      });
-      tx2();
-    }
-    const msg = `${accounts.length} accounts synced from Instantly`;
-    logSync("instantly", true, msg);
-    return msg;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    logSync("instantly", false, msg);
-    return `Instantly sync failed: ${msg}`;
-  }
+  return "Instantly retired 2026-11-01 — warmup lives in Smartlead";
 }
 
 // Saleshandy platform retired (owner 2026-11-01): its 60 boxes moved to
