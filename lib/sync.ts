@@ -1,6 +1,5 @@
 import { getDb } from "./db";
 import { listAllAccounts, warmupAnalytics } from "./instantly";
-import { listAllEmailAccounts, emailAccountStats, providerFromEsp } from "./saleshandy";
 import {
   listAllAccounts as listSmartleadAccounts,
   listCampaigns,
@@ -115,91 +114,13 @@ export async function syncInstantly(): Promise<string> {
   }
 }
 
+// Saleshandy platform retired (owner 2026-11-01): its 60 boxes moved to
+// Smartlead via OAuth (57) or were deleted in M365 (3); the subscription is
+// being cancelled. syncSaleshandy was removed; the sh_* / saleshandy_* DB
+// columns remain as historical data. The domain-tagging rule below keeps
+// provenance visible on the migrated boxes.
 export async function syncSaleshandy(): Promise<string> {
-  const db = getDb();
-  try {
-    const accounts = await listAllEmailAccounts();
-    const update = db.prepare(`
-      UPDATE senders SET
-        saleshandy_id = ?, saleshandy_status = ?,
-        daily_limit = COALESCE(?, daily_limit),
-        sh_used_today = ?,
-        provider = CASE WHEN provider = 'other' AND ? IS NOT NULL THEN ? ELSE provider END
-      WHERE email = ?
-    `);
-    const insertMissing = db.prepare(`
-      INSERT OR IGNORE INTO senders (email, domain, provider, saleshandy_id, last_synced)
-      VALUES (?, ?, 'other', ?, datetime('now'))
-    `);
-    const setCampaigns = db.prepare("UPDATE senders SET campaigns = ? WHERE email = ?");
-    // Consecutive zero-send days (drain detection for retiring senders).
-    // Incremented at most once per calendar day even if sync runs repeatedly.
-    const bumpZero = db.prepare(`
-      UPDATE senders SET
-        sh_zero_days = COALESCE(sh_zero_days, 0) + 1,
-        sh_zero_checked = date('now')
-      WHERE email = ? AND (sh_zero_checked IS NULL OR sh_zero_checked < date('now'))
-    `);
-    const resetZero = db.prepare(
-      "UPDATE senders SET sh_zero_days = 0, sh_zero_checked = date('now') WHERE email = ?",
-    );
-    for (const a of accounts) {
-      insertMissing.run(a.email, domainOf(a.email), a.id);
-      const prov = providerFromEsp(a.esp);
-      update.run(
-        a.id,
-        a.status != null ? String(a.status) : null,
-        a.dailyLimit,
-        a.usedToday,
-        prov,
-        prov,
-        a.email,
-      );
-      if (a.sequences.length > 0) setCampaigns.run(JSON.stringify(a.sequences), a.email);
-      if (a.usedToday !== null) {
-        if (a.usedToday > 0) resetZero.run(a.email);
-        else bumpZero.run(a.email);
-      }
-    }
-
-    // Per-account stats: one call each. Saleshandy rate-limits aggressively
-    // (observed: cuts off after ~20 rapid calls), so pace at ~1 call/1.2 s and
-    // give failures a slower second pass.
-    const setStats = db.prepare(
-      "UPDATE senders SET bounce_rate = ?, sh_setup_score = ?, sh_inbox_score = ? WHERE email = ?",
-    );
-    let ok = 0;
-    const fetchStats = async (a: (typeof accounts)[number]) => {
-      const stats = await emailAccountStats(a.id);
-      setStats.run(stats.bounceRate, stats.setupScore, stats.inboxScore, a.email);
-      ok++;
-    };
-    const retryLater: typeof accounts = [];
-    for (const a of accounts) {
-      try {
-        await fetchStats(a);
-      } catch {
-        retryLater.push(a);
-      }
-      await new Promise((r) => setTimeout(r, 1200));
-    }
-    let failed = 0;
-    for (const a of retryLater) {
-      try {
-        await fetchStats(a);
-      } catch {
-        failed++;
-      }
-      await new Promise((r) => setTimeout(r, 3000));
-    }
-    const msg = `${accounts.length} Saleshandy accounts; stats ok=${ok} failed=${failed}`;
-    logSync("saleshandy", true, msg);
-    return msg;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    logSync("saleshandy", false, msg);
-    return `Saleshandy sync failed: ${msg}`;
-  }
+  return "Saleshandy retired 2026-11-01 — sync disabled";
 }
 
 // Ex-Saleshandy fleet (owner 2026-11-01): 20 O365 domains whose 60 mailboxes
