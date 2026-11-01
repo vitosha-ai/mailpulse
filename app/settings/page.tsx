@@ -43,11 +43,9 @@ const FIELDS = [
     label: "Supabase secret key (Contact Vault)",
     help: "Supabase → Settings → API Keys → Secret keys → default (sb_secret_…), or the legacy service_role key — either works. Server-side only; it never reaches the browser.",
   },
-  {
-    key: "maildoso_api_key",
-    label: "Maildoso API key (for the Inbox)",
-    help: "Maildoso → Settings → API / Personal Access Token. MailPulse uses it to auto-connect to your master inbox (@maildoso.email) and read real replies — warmup mail is filtered out. Easiest option; no IMAP details needed.",
-  },
+  // Maildoso API key field removed 2026-11-01 — provider fully retired (all
+  // boxes deleted) and the Inbox feature is off; the backend key slot remains
+  // harmless if ever revived.
 ] as const;
 
 export default function Settings() {

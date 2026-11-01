@@ -456,7 +456,6 @@ export default function Dashboard() {
               />
               <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className={selectCls}>
                 <option value="">All providers</option>
-                <option value="maildoso">Maildoso</option>
                 <option value="google">Google</option>
                 <option value="microsoft">Microsoft</option>
                 <option value="other">Other</option>
