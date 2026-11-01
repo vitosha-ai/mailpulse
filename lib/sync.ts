@@ -202,6 +202,19 @@ export async function syncSaleshandy(): Promise<string> {
   }
 }
 
+// Ex-Saleshandy fleet (owner 2026-11-01): 20 O365 domains whose 60 mailboxes
+// are being moved from Saleshandy into Smartlead via OAuth. Any sender on
+// these domains is tagged provider='saleshandy' so provenance stays visible
+// on the fleet page and in the provider filter.
+const SALESHANDY_DOMAINS = new Set([
+  "vitoshaai.com", "vitoshaanalytics.com", "vitoshaapps.com", "vitoshaazure.com",
+  "vitoshabi.com", "vitoshacloud.com", "vitoshaconsulting.com", "vitoshadata.com",
+  "vitoshadigital.com", "vitoshadynamics.com", "vitoshafabric.com",
+  "vitoshainnovation.com", "vitoshainsights.com", "vitoshaintegration.com",
+  "vitoshamodernwork.com", "vitoshapartners.com", "vitoshaplatform.com",
+  "vitoshaservices.com", "vitoshatransformation.com", "vitoshaworkplace.com",
+]);
+
 export async function syncSmartlead(): Promise<string> {
   const db = getDb();
   try {
@@ -210,6 +223,9 @@ export async function syncSmartlead(): Promise<string> {
       INSERT OR IGNORE INTO senders (email, domain, provider, last_synced)
       VALUES (?, ?, 'other', datetime('now'))
     `);
+    const tagSaleshandy = db.prepare(
+      `UPDATE senders SET provider = 'saleshandy' WHERE lower(domain) = ? AND provider != 'saleshandy'`,
+    );
     const update = db.prepare(`
       UPDATE senders SET
         smartlead_id = ?, smartlead_status = ?, sl_warmup_reputation = ?,
@@ -222,6 +238,8 @@ export async function syncSmartlead(): Promise<string> {
     const alerts: AlertCandidate[] = [];
     for (const a of accounts) {
       insertMissing.run(a.email, domainOf(a.email));
+      const dom = domainOf(a.email).toLowerCase();
+      if (SALESHANDY_DOMAINS.has(dom)) tagSaleshandy.run(dom);
       update.run(
         String(a.id),
         a.status,
