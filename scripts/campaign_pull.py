@@ -242,6 +242,61 @@ CAMPAIGNS["bc-2"] = ("bc-2-campaign-apollo.csv", [
                           "currently_using_any_of_technology_uids": BC_ENTRY,
                           "currently_not_using_any_of_technology_uids": BC_NO}),
 ])
+# ---- Proof-led lanes (2026-11-07): each cites a vitoshainc.com case study and a dated public trigger.
+# Hiring window = last 90 days. Capped at 2 contacts per company BEFORE reveal.
+HIRED = {"min": "2026-08-09", "max": "2026-11-07"}
+US = {"person_locations": ["United States"], "organization_locations": ["United States"], "_per_company": 2}
+AML_TITLES = ["Chief Compliance Officer", "BSA Officer", "BSA/AML Officer", "Head of Financial Crimes", "Director of Financial Crimes",
+              "Chief Risk Officer", "Head of Compliance", "Director of Compliance", "Chief Information Officer", "CIO",
+              "Chief Operating Officer", "COO"]
+CAMPAIGNS["lane1-aml"] = ("lane1-aml-campaign-apollo.csv", [
+    # banks named in public OCC/FinCEN AML orders in the last 12 months (3 contacts each)
+    ("A0-named-aml-orders", {**US, "_per_company": 3, "person_titles": AML_TITLES,
+                             "q_organization_domains_list": ["bankofamerica.com", "americanexpress.com", "cfsb.com", "unitedtexasbank.com"]}),
+    ("A1-banks-hiring-aml", {**US, "person_titles": AML_TITLES, "organization_num_employees_ranges": ["200,10000"],
+                             "organization_naics_codes": ["5221"],
+                             "q_organization_job_titles": ["bsa analyst", "aml analyst", "aml investigator", "bsa/aml", "financial crimes",
+                                                           "transaction monitoring", "sanctions analyst", "fraud and aml"],
+                             "organization_job_posted_at_range": HIRED}),
+])
+CAMPAIGNS["lane2-claims"] = ("lane2-claims-campaign-apollo.csv", [
+    ("C1-insurers-hiring-claims-ai", {**US, "person_titles": ["Chief Claims Officer", "VP Claims", "Head of Claims", "SVP Claims",
+                                      "Director of Claims", "Chief Information Officer", "CIO", "Chief Data Officer", "VP Data",
+                                      "Head of Data Science", "Chief Digital Officer", "VP Innovation"],
+                                      "organization_naics_codes": ["5241"],
+                                      "q_organization_job_titles": ["claims data scientist", "data scientist", "machine learning engineer",
+                                                                    "claims automation", "claims analyst", "claims systems analyst", "ai engineer"],
+                                      "organization_job_posted_at_range": HIRED}),
+])
+CAMPAIGNS["lane3-warehouse"] = ("lane3-warehouse-campaign-apollo.csv", [
+    ("W1-distributors-hiring-warehouse", {**US, "person_titles": ["VP Operations", "VP Supply Chain", "Director of Operations",
+                                          "Director of Supply Chain", "COO", "VP Logistics", "Director of Logistics",
+                                          "Director of Distribution", "CIO", "IT Director", "ERP Manager"],
+                                          "organization_num_employees_ranges": ["100,5000"], "organization_naics_codes": ["42", "493", "484"],
+                                          "q_organization_job_titles": ["warehouse manager", "warehouse supervisor", "inventory manager",
+                                                                        "inventory control", "distribution center manager", "supply chain analyst", "wms"],
+                                          "organization_job_posted_at_range": HIRED,
+                                          "not_organization_naics_codes": ["5613", "5415", "5416", "92"]}),
+])
+CAMPAIGNS["lane4-clinical"] = ("lane4-clinical-campaign-apollo.csv", [
+    ("H1-health-systems-hiring-data", {**US, "person_titles": ["Chief Information Officer", "CIO", "Chief Data Officer", "Chief Analytics Officer",
+                                       "VP Analytics", "Director of Analytics", "Director of Business Intelligence", "VP Quality",
+                                       "Chief Quality Officer", "Chief Medical Information Officer", "VP Data", "Director of Data"],
+                                       "organization_num_employees_ranges": ["500,100000"], "organization_naics_codes": ["622", "621"],
+                                       "currently_using_all_of_technology_uids": ["office_365"],
+                                       "q_organization_job_titles": ["data engineer", "analytics engineer", "business intelligence developer",
+                                                                     "data analyst", "clinical data analyst", "healthcare data analyst", "power bi developer"],
+                                       "organization_job_posted_at_range": HIRED}),
+])
+CAMPAIGNS["lane5-kyc"] = ("lane5-kyc-campaign-apollo.csv", [
+    ("K1-banks-hiring-kyc-onboarding", {**US, "person_titles": ["COO", "Chief Operating Officer", "Head of Onboarding", "Head of Operations",
+                                        "VP Operations", "Chief Risk Officer", "Chief Lending Officer", "VP Lending",
+                                        "Chief Information Officer", "CIO", "Chief Digital Officer"],
+                                        "organization_num_employees_ranges": ["200,10000"], "organization_naics_codes": ["5221"],
+                                        "q_organization_job_titles": ["kyc analyst", "kyc", "onboarding specialist", "client onboarding",
+                                                                      "loan operations", "loan processor"],
+                                        "organization_job_posted_at_range": HIRED}),
+])
 TOTAL_CAP = {"databricks-lakehouse": 4000, "fabric-2": 4000, "m365-power-bi": 4000, "d365-fo-2": 4000, "bc-2": 4000}
 
 CAMPAIGNS["uae-fo-finance"] = ("uae-fo-finance-campaign-apollo.csv", [
@@ -256,14 +311,22 @@ CAMPAIGNS["uae-fo-tax"] = ("uae-fo-tax-campaign-apollo.csv", [
                                         "Indirect Tax Manager", "VAT Manager", "Senior Tax Manager"]})])
 
 
-def search_ids(ap, filters, first_page_only):
-    ids, page = [], 1
+def search_ids(ap, filters, first_page_only, per_company=None):
+    ids, page, per_org = [], 1, {}
     while True:
         data = ap._request("POST", "mixed_people/api_search",
                            json={**{k: v for k, v in COMMON.items() if not (k in ("organization_locations","person_locations") and "person_locations" in filters)}, **filters, "page": page, "per_page": 100})
         total = data.get("total_entries") or 0
         people = data.get("people") or []
-        ids += [p["id"] for p in people if p.get("id")]
+        for p in people:
+            if not p.get("id"):
+                continue
+            org = ((p.get("organization") or {}).get("name") or "").strip().lower()
+            if per_company and org:
+                if per_org.get(org, 0) >= per_company:
+                    continue  # company already at its quota: never revealed, never charged
+                per_org[org] = per_org.get(org, 0) + 1
+            ids.append(p["id"])
         if first_page_only or not people or page * 100 >= total:
             return ids, total
         page += 1
@@ -292,8 +355,10 @@ def main():
 
     if args.dry_run:
         for seg, filters in segments:
+            pc = filters.get("_per_company")
             filters = {k: v for k, v in filters.items() if not k.startswith("_")}
-            print(f"{seg}: Apollo total={search_ids(ap, filters, True)[1]}")
+            ids, total = search_ids(ap, filters, False, pc) if pc else (None, search_ids(ap, filters, True)[1])
+            print(f"{seg}: Apollo total={total}" + (f", {len(ids)} after {pc}/company cap" if pc else ""))
         return
 
     new_file = not out.exists()
@@ -309,9 +374,10 @@ def main():
                 continue
             filters = dict(filters)
             cap = filters.pop("_cap", None)
+            per_company = filters.pop("_per_company", None)
             if total_cap:
                 cap = min(cap or 10**9, total_cap - held)
-            ids, total = search_ids(ap, filters, False)
+            ids, total = search_ids(ap, filters, False, per_company)
             todo = [i for i in dict.fromkeys(ids) if i not in seen]
             # Ask the vault which of these people we already own — before any credit is spent.
             owned = set()
