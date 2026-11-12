@@ -9,8 +9,20 @@ MailPulse and its OUTBOUND_INGEST_TOKEN), e.g. from PowerShell:
   $env:VAULT_URL="https://mailpulse-production.up.railway.app"; $env:VAULT_TOKEN="..."
   Start-Process py -ArgumentList "scripts/vault_autoload.py" -WorkingDirectory C:\mailpulse -WindowStyle Hidden
 """
-import datetime, json, sqlite3, subprocess, sys, time
+import datetime, json, os, sqlite3, subprocess, sys, time
 from pathlib import Path
+
+# When launched by the Windows scheduled task there is no VAULT_* in the
+# environment; fetch production's ingest token from the Railway CLI (logged in
+# on this PC) so the loader can run unattended after a reboot.
+if not os.environ.get("VAULT_TOKEN"):
+    try:
+        v = json.loads(subprocess.run(["railway", "variables", "--json"], capture_output=True, text=True,
+                                      cwd=Path(__file__).resolve().parents[1], shell=True).stdout)
+        os.environ["VAULT_TOKEN"] = v.get("OUTBOUND_INGEST_TOKEN", "")
+        os.environ.setdefault("VAULT_URL", "https://mailpulse-production.up.railway.app")
+    except Exception:
+        pass
 
 ROOT = Path(__file__).resolve().parents[1]
 LOG = ROOT / "data" / "vault_autoload.log"
