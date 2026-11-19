@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.11.0",
     "better-sqlite3": "^12.11.1",
     "exceljs": "^4.4.0",
     "google-auth-library": "^10.9.0",

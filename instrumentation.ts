@@ -55,6 +55,36 @@ export async function register() {
     setInterval(fedRun, 3_600_000);
   }
 
+  // US State & Local (SLED) RFP agent: reads forwarded BidPrime alert emails
+  // every hour, and sends ONE digest per working day (Mon-Fri, not federal
+  // holidays) at/after 8 AM ET, after BidPrime's 6 AM alert has been read.
+  // SLED_DAILY=0 disables. No-op until the mailbox + ANTHROPIC_API_KEY are set.
+  if (process.env.SLED_DAILY !== "0") {
+    let sledBusy = false;
+    const sledTick = async () => {
+      if (sledBusy) return;
+      sledBusy = true;
+      try {
+        const { getSetting, setSetting } = await import("./lib/db");
+        const { runSled, emailDigest, isWorkingDayET, etNow } = await import("./lib/sled");
+        const report = await runSled();
+        if (report.note) return; // not configured yet
+        if (report.emails || report.failed) console.log("[sled]", JSON.stringify({ ...report, newIds: report.newIds.length }));
+        const et = etNow();
+        if (et.hour >= 8 && isWorkingDayET() && getSetting("sled_digest_date") !== et.ymd) {
+          setSetting("sled_digest_date", et.ymd); // claim the day first so a failure never loops
+          console.log("[sled] digest", await emailDigest(true));
+        }
+      } catch (e) {
+        console.error("[sled] failed:", e instanceof Error ? e.message : e);
+      } finally {
+        sledBusy = false;
+      }
+    };
+    setTimeout(sledTick, 8 * 60_000);
+    setInterval(sledTick, 3_600_000);
+  }
+
   setTimeout(run, 2 * 60_000); // first sync 2 minutes after boot
   setInterval(run, hours * 3_600_000);
   console.log(`[auto-sync] scheduled every ${hours}h`);

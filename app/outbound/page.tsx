@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallActivityWidget from "./CallActivityWidget";
 import StaffingBoard from "./StaffingBoard";
 import FederalBoard from "./FederalBoard";
+import SledBoard from "./SledBoard";
 
 type Row = {
   id: number;
@@ -409,6 +410,16 @@ export default function Outbound() {
       .catch(() => {});
   }, [marketScope]);
 
+  // SLED tile counts come from the BidPrime agent's own table.
+  const [sledStats, setSledStats] = useState<{ open: number; strong: number; fresh: number } | null>(null);
+  useEffect(() => {
+    if (marketScope) return;
+    fetch("/api/sled?stats=1")
+      .then((r) => r.json())
+      .then((j) => setSledStats(j))
+      .catch(() => {});
+  }, [marketScope]);
+
   useEffect(() => {
     fetch("/api/outbound/costs")
       .then((r) => r.json())
@@ -664,6 +675,11 @@ export default function Outbound() {
         desc: "SAM.gov bids Vitosha can win · ranked by fit · daily Excel email",
         accent: "hover:border-indigo-400/60 hover:shadow-indigo-500/10",
       },
+      {
+        m: "sled", flag: "🏙️", name: "US State & Local RFPs",
+        desc: "BidPrime bids across all states · filtered to Vitosha's services · one digest each working day",
+        accent: "hover:border-sky-400/60 hover:shadow-sky-500/10",
+      },
     ];
     return (
       <div className="min-h-screen bg-slate-50 bg-[radial-gradient(ellipse_60%_40%_at_50%_-10%,rgba(11,64,176,0.14),transparent)] text-slate-800">
@@ -707,24 +723,27 @@ export default function Outbound() {
                   <h2 className="mt-3 text-xl font-bold text-slate-900">{t.name}</h2>
                   <p className="mt-1 text-xs text-slate-500">{t.desc}</p>
                   <div className="mt-5 flex items-center gap-2 text-sm">
-                    {t.m === "federal" ? (
-                      fedStats && fedStats.open > 0 ? (
-                        <>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                            {fedStats.open} open
-                          </span>
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">
-                            {fedStats.strong} strong fit
-                          </span>
-                          {fedStats.fresh > 0 && (
-                            <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-700">
-                              {fedStats.fresh} new today
+                    {t.m === "federal" || t.m === "sled" ? (
+                      (() => {
+                        const s = t.m === "federal" ? fedStats : sledStats;
+                        return s && s.open > 0 ? (
+                          <>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                              {s.open} open
                             </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-400">no opportunities pulled yet</span>
-                      )
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 font-medium text-emerald-700">
+                              {s.strong} strong fit
+                            </span>
+                            {s.fresh > 0 && (
+                              <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-medium text-indigo-700">
+                                {s.fresh} new today
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-400">no opportunities pulled yet</span>
+                        );
+                      })()
                     ) : n > 0 ? (
                       <>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
@@ -755,7 +774,7 @@ export default function Outbound() {
 
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Four independent agents publish here. Each has its own leads, filters and exports.
+            Five independent agents publish here. Each has its own leads, filters and exports.
           </p>
         </div>
       </div>
@@ -768,6 +787,9 @@ export default function Outbound() {
   }
   if (scopeReady && marketScope === "federal") {
     return <FederalBoard onExit={exitToRegions} />;
+  }
+  if (scopeReady && marketScope === "sled") {
+    return <SledBoard onExit={exitToRegions} />;
   }
 
   return (
