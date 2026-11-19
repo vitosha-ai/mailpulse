@@ -58,6 +58,11 @@ const daysLeft = (due: string) => {
   if (!due) return null;
   return Math.round((new Date(due).getTime() - new Date(new Date().toISOString().slice(0, 10)).getTime()) / 86_400_000);
 };
+// Dates are YYYY-MM-DD strings, so plain string comparison is date order.
+// A row with no date is hidden only when a range is set.
+const inRange = (d: string, from: string, to: string) =>
+  (!from && !to) || (!!d && (!from || d >= from) && (!to || d <= to));
+const dayOffset = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 const ago = (iso: string | null) => {
   if (!iso) return "never";
   const h = Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000);
@@ -74,6 +79,10 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [hideNoBid, setHideNoBid] = useState(true);
+  // Calendar filter: which date to filter on, and a From-To range (inclusive).
+  const [dateField, setDateField] = useState<"due" | "added">("due");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
@@ -137,9 +146,16 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
         (!stateF || r.state === stateF) &&
         (!status || r.status === status) &&
         (!hideNoBid || r.status !== "No Bid" || status === "No Bid") &&
+        inRange(dateField === "due" ? r.due_date : r.first_seen, from, to) &&
         (!needle || `${r.title} ${r.agency} ${r.refnum} ${r.alert_name}`.toLowerCase().includes(needle)),
     );
-  }, [rows, tiers, line, stateF, status, q, hideNoBid]);
+  }, [rows, tiers, line, stateF, status, q, hideNoBid, dateField, from, to]);
+
+  const preset = (field: "due" | "added", days: number) => {
+    setDateField(field);
+    if (field === "due") { setFrom(today); setTo(dayOffset(days)); }
+    else { setFrom(dayOffset(-days)); setTo(today); }
+  };
 
   const kpi = useMemo(() => {
     const live = rows.filter((r) => r.tier !== "Drop" && r.status !== "No Bid");
@@ -255,6 +271,32 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
           </label>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, agency, ref #…"
             className="ml-auto w-64 rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs" />
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+          <span className="font-semibold text-slate-600">📅 Dates</span>
+          <select value={dateField} onChange={(e) => setDateField(e.target.value as "due" | "added")}
+            className="rounded-lg border border-slate-300 bg-white px-2 py-1">
+            <option value="due">Due date</option>
+            <option value="added">Date added</option>
+          </select>
+          <label className="flex items-center gap-1 text-slate-500">From
+            <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-0.5" />
+          </label>
+          <label className="flex items-center gap-1 text-slate-500">To
+            <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-0.5" />
+          </label>
+          <span className="mx-1 text-slate-300">|</span>
+          {([["Due in 7 days", "due", 7], ["Due in 30 days", "due", 30], ["Added today", "added", 0], ["Added last 7 days", "added", 7]] as const).map(([label, f, d]) => (
+            <button key={label} onClick={() => preset(f, d)}
+              className="rounded-full bg-slate-100 px-2.5 py-0.5 text-slate-600 hover:bg-slate-200">{label}</button>
+          ))}
+          {(from || to) && (
+            <button onClick={() => { setFrom(""); setTo(""); }} className="ml-1 text-brand hover:underline">Clear dates</button>
+          )}
+          <span className="ml-auto text-slate-400">{shown.length} shown</span>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
