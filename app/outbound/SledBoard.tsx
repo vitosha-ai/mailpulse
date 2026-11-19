@@ -189,7 +189,7 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
 
         {setupMissing && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Setup not finished:{!config?.mailbox && " the BidPrime alert mailbox (SLED_IMAP_USER / SLED_IMAP_PASS) isn't connected."}
+            Setup not finished:{!config?.mailbox && " read-only access to proposals@vitoshainc.com (where BidPrime alerts arrive) isn't connected."}
             {!config?.ai && " ANTHROPIC_API_KEY isn't set."} Bids will appear once both are in place.
           </div>
         )}

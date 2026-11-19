@@ -390,7 +390,102 @@ export function storeEmail(msgKey: string, receivedAt: string, subject: string, 
 }
 
 // ---------------------------------------------------------------------------
-// Mailbox reader. A Gmail filter forwards BidPrime alerts to this mailbox.
+// Mailbox reader. BidPrime alerts land in proposals@vitoshainc.com. Preferred
+// path: Gmail API with the gmail.readonly scope through the Workspace service
+// account (domain-wide delegation) - Google itself guarantees it can only
+// read. Fallback: IMAP with an app password (reads with PEEK, so nothing is
+// marked read). Either way only BidPrime messages are downloaded.
+
+const DEFAULT_MAILBOX = "proposals@vitoshainc.com";
+
+function gmailConfig() {
+  const raw = process.env.GOOGLE_SA_JSON || getSetting("google_sa_json") || "";
+  if (!raw) return null;
+  try {
+    const sa = JSON.parse(raw) as { client_email?: string; private_key?: string };
+    if (!sa.client_email || !sa.private_key) return null;
+    const mailbox = process.env.SLED_MAILBOX || getSetting("sled_mailbox") || DEFAULT_MAILBOX;
+    return { sa: { client_email: sa.client_email, private_key: sa.private_key }, mailbox };
+  } catch {
+    return null;
+  }
+}
+
+type Collected = { stored: string[]; skipped: number };
+
+async function collectViaGmailApi(cfg: NonNullable<ReturnType<typeof gmailConfig>>): Promise<Collected> {
+  const { JWT } = await import("google-auth-library");
+  const jwt = new JWT({
+    email: cfg.sa.client_email,
+    key: cfg.sa.private_key,
+    subject: cfg.mailbox,
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+  });
+  const { access_token } = await jwt.authorize();
+  const auth = { Authorization: `Bearer ${access_token}` };
+  const base = `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(cfg.mailbox)}`;
+  const seen = getDb().prepare("SELECT 1 FROM sled_emails WHERE msg_key = ?");
+  const out: Collected = { stored: [], skipped: 0 };
+
+  // Only BidPrime mail, last 7 days (overlap is harmless: already-stored ids are skipped).
+  let pageToken = "";
+  do {
+    const q = encodeURIComponent("from:bidprime.com newer_than:7d");
+    const r = await fetch(`${base}/messages?q=${q}&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ""}`, { headers: auth });
+    if (!r.ok) throw new Error(`Gmail ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const list = (await r.json()) as { messages?: { id: string }[]; nextPageToken?: string };
+    for (const { id } of list.messages ?? []) {
+      const key = `gmail-${id}`;
+      if (seen.get(key)) continue;
+      const m = await fetch(`${base}/messages/${id}?format=raw`, { headers: auth });
+      if (!m.ok) continue;
+      const { raw } = (await m.json()) as { raw?: string };
+      if (!raw) continue;
+      const p = await simpleParser(Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64"));
+      const html = typeof p.html === "string" ? p.html : "";
+      if (!isBidPrime(p.from?.text || "", p.subject || "", html)) { out.skipped++; continue; }
+      storeEmail(key, (p.date ?? new Date()).toISOString(), p.subject || "", html || null, p.text || null);
+      out.stored.push(key);
+    }
+    pageToken = list.nextPageToken || "";
+  } while (pageToken);
+  return out;
+}
+
+async function collectViaImap(cfg: NonNullable<ReturnType<typeof imapConfig>>): Promise<Collected> {
+  const out: Collected = { stored: [], skipped: 0 };
+  const lastUid = Number(getSetting("sled_imap_last_uid") || 0);
+  const imap = new ImapFlow(cfg);
+  await imap.connect();
+  try {
+    const lock = await imap.getMailboxLock("INBOX");
+    try {
+      // Server-side filter: only messages from BidPrime. First run looks back 7 days.
+      const uids = lastUid
+        ? ((await imap.search({ from: "bidprime", uid: `${lastUid + 1}:*` }, { uid: true })) || []).filter((u) => u > lastUid)
+        : (await imap.search({ from: "bidprime", since: new Date(Date.now() - 7 * 86_400_000) }, { uid: true })) || [];
+      let maxUid = lastUid;
+      for (const uid of uids) {
+        // `source` is fetched with BODY.PEEK, so the message stays unread.
+        const msg = await imap.fetchOne(String(uid), { source: true }, { uid: true });
+        maxUid = Math.max(maxUid, uid);
+        if (!msg || !msg.source) continue;
+        const p = await simpleParser(msg.source as Buffer);
+        const html = typeof p.html === "string" ? p.html : "";
+        if (!isBidPrime(p.from?.text || "", p.subject || "", html)) { out.skipped++; continue; }
+        const key = p.messageId || `uid-${uid}`;
+        storeEmail(key, (p.date ?? new Date()).toISOString(), p.subject || "", html || null, p.text || null);
+        out.stored.push(key);
+      }
+      setSetting("sled_imap_last_uid", String(maxUid));
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await imap.logout().catch(() => {});
+  }
+  return out;
+}
 
 function imapConfig() {
   const user = process.env.SLED_IMAP_USER || getSetting("sled_imap_user") || "";
@@ -414,42 +509,13 @@ export async function runSled(): Promise<SledRunReport> {
   ensureTables();
   const db = getDb();
   const report: SledRunReport = { emails: 0, skipped: 0, failed: 0, bids: 0, inserted: 0, updated: 0, dropped: 0, tooLate: 0, newIds: [] };
-  const cfg = imapConfig();
-  if (!cfg) return { ...report, note: "Mailbox not configured (SLED_IMAP_USER / SLED_IMAP_PASS)" };
+  const gmail = gmailConfig();
+  const imap = gmail ? null : imapConfig();
+  if (!gmail && !imap) return { ...report, note: "Mailbox access not set up (read-only Gmail access to proposals@, or SLED_IMAP_USER / SLED_IMAP_PASS)" };
   if (!anthropicKey()) return { ...report, note: "ANTHROPIC_API_KEY not configured" };
 
-  const lastUid = Number(getSetting("sled_imap_last_uid") || 0);
-  const imap = new ImapFlow(cfg);
-  const fresh: string[] = [];
-  await imap.connect();
-  try {
-    const lock = await imap.getMailboxLock("INBOX");
-    try {
-      // First run looks back 7 days; afterwards only messages newer than the last one read.
-      const uids = lastUid
-        ? ((await imap.search({ uid: `${lastUid + 1}:*` }, { uid: true })) || []).filter((u) => u > lastUid)
-        : (await imap.search({ since: new Date(Date.now() - 7 * 86_400_000) }, { uid: true })) || [];
-      let maxUid = lastUid;
-      for (const uid of uids) {
-        const msg = await imap.fetchOne(String(uid), { source: true }, { uid: true });
-        maxUid = Math.max(maxUid, uid);
-        if (!msg || !msg.source) continue;
-        const p = await simpleParser(msg.source as Buffer);
-        const from = p.from?.text || "";
-        const subject = p.subject || "";
-        const html = typeof p.html === "string" ? p.html : "";
-        if (!isBidPrime(from, subject, html)) { report.skipped++; continue; }
-        const key = p.messageId || `uid-${uid}`;
-        storeEmail(key, (p.date ?? new Date()).toISOString(), subject, html || null, p.text || null);
-        fresh.push(key);
-      }
-      setSetting("sled_imap_last_uid", String(maxUid));
-    } finally {
-      lock.release();
-    }
-  } finally {
-    await imap.logout().catch(() => {});
-  }
+  const got = gmail ? await collectViaGmailApi(gmail) : await collectViaImap(imap!);
+  report.skipped = got.skipped;
 
   // Also retry any email a previous run stored but couldn't process.
   const pending = db.prepare("SELECT msg_key FROM sled_emails WHERE processed_at IS NULL").all() as { msg_key: string }[];
@@ -635,10 +701,11 @@ function emailRecipients() {
 
 export function sledConfig() {
   ensureTables();
+  const gmail = gmailConfig();
   const cfg = imapConfig();
   const failed = getDb().prepare("SELECT COUNT(*) n FROM sled_emails WHERE processed_at IS NULL AND error <> ''").get() as { n: number };
   return {
-    mailbox: cfg ? cfg.auth.user : null,
+    mailbox: gmail ? `${gmail.mailbox} (read-only)` : cfg ? cfg.auth.user : null,
     ai: Boolean(anthropicKey()),
     resend: Boolean(process.env.RESEND_API_KEY),
     emailTo: emailRecipients(),
