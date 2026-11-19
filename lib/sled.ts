@@ -342,14 +342,19 @@ export async function processEmail(msgKey: string): Promise<SledProcessReport> {
       if (ruled.fit === "Drop") report.dropped++;
       const state = (b.state || "").toUpperCase().slice(0, 2);
       const titleKey = norm(b.title);
-      const keyBase = b.refnum ? `${norm(b.refnum)}|${norm(b.agency)}` : `${titleKey}|${norm(b.agency)}`;
-      const existing =
-        (byId.get(hash(keyBase)) as { id: string } | undefined) ??
-        (byTitle.get(titleKey, state) as { id: string } | undefined);
       const m = /^L(\d+)$/.exec(b.link_id.trim());
       const url = m ? links[Number(m[1]) - 1] || "" : "";
+      // BidPrime links carry the bid's own id (…/bid/link/source/<uuid>): the
+      // most reliable key. Otherwise fall back to ref # + agency, or title + agency.
+      const bidUuid = /\/bid\/link\/source\/([0-9a-f-]{36})/i.exec(url)?.[1]?.toLowerCase();
+      const keyBase = b.refnum ? `${norm(b.refnum)}|${norm(b.agency)}` : `${titleKey}|${norm(b.agency)}`;
+      const newId = bidUuid ? `bp-${bidUuid}` : hash(keyBase);
+      const existing =
+        (byId.get(newId) as { id: string } | undefined) ??
+        (byId.get(hash(keyBase)) as { id: string } | undefined) ??
+        (byTitle.get(titleKey, state) as { id: string } | undefined);
       const row = {
-        id: existing?.id ?? hash(keyBase),
+        id: existing?.id ?? newId,
         title: b.title.trim(),
         agency: b.agency.trim(),
         state,
