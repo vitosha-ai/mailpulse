@@ -787,3 +787,125 @@ export function sledStats() {
     fresh: rows.filter((r) => r.first_seen === today).length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Gap test (one-off): which state/local bids reach proposals@ straight from
+// agency portals (Ionwave, OpenGov, state eProcurement...) but NOT through our
+// BidPrime alerts? Results go to their own table - never the board or digest.
+
+function ensureGapTable() {
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS sled_gap (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      msg_key TEXT NOT NULL,
+      portal TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      received_at TEXT NOT NULL DEFAULT '',
+      title TEXT NOT NULL DEFAULT '',
+      agency TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT '',
+      due_date TEXT NOT NULL DEFAULT '',
+      service_line TEXT NOT NULL DEFAULT '',
+      tier TEXT NOT NULL DEFAULT '',
+      reason TEXT NOT NULL DEFAULT '',
+      in_bidprime TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS sled_gap_seen (msg_key TEXT PRIMARY KEY);
+  `);
+}
+
+const GAP_QUERY =
+  "-from:bidprime.com -from:vitoshainc.com -from:vitosha-inc.com " +
+  "(bid OR bids OR solicitation OR opportunity OR RFP OR RFQ OR RFI OR addendum OR invitation OR sourcing OR tender)";
+
+export async function runGapTest(days = 7): Promise<Record<string, unknown>> {
+  ensureTables();
+  ensureGapTable();
+  const cfg = imapConfig();
+  if (!cfg) throw new Error("IMAP mailbox not configured");
+  if (!anthropicKey()) throw new Error("ANTHROPIC_API_KEY not configured");
+  const db = getDb();
+  const seen = db.prepare("SELECT 1 FROM sled_gap_seen WHERE msg_key = ?");
+  const markSeen = db.prepare("INSERT OR IGNORE INTO sled_gap_seen (msg_key) VALUES (?)");
+  const ins = db.prepare(`INSERT INTO sled_gap (msg_key, portal, subject, received_at, title, agency, state, due_date, service_line, tier, reason, in_bidprime)
+    VALUES (@msg_key, @portal, @subject, @received_at, @title, @agency, @state, @due_date, @service_line, @tier, @reason, @in_bidprime)`);
+  const bp = db.prepare("SELECT id, title, state, agency FROM sled_opps").all() as { id: string; title: string; state: string; agency: string }[];
+  const status = { emails: 0, bids: 0, failed: 0, started: new Date().toISOString(), done: false };
+  setSetting("sled_gap_status", JSON.stringify(status));
+
+  const imap = new ImapFlow(cfg);
+  await imap.connect();
+  const msgs: { key: string; portal: string; subject: string; date: string; html: string | null; text: string | null }[] = [];
+  try {
+    const lock = await imap.getMailboxLock("INBOX");
+    try {
+      const uids = (await imap.search({ gmraw: `newer_than:${days}d ${GAP_QUERY}` }, { uid: true })) || [];
+      for (const uid of uids) {
+        const m = await imap.fetchOne(String(uid), { source: true }, { uid: true }); // PEEK: stays unread
+        if (!m || !m.source) continue;
+        const p = await simpleParser(m.source as Buffer);
+        const key = p.messageId || `uid-${uid}`;
+        if (seen.get(key)) continue;
+        const addr = p.from?.value?.[0]?.address?.toLowerCase() || "";
+        msgs.push({
+          key,
+          portal: addr.split("@")[1] || addr,
+          subject: p.subject || "",
+          date: (p.date ?? new Date()).toISOString(),
+          html: typeof p.html === "string" ? p.html : null,
+          text: p.text || null,
+        });
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await imap.logout().catch(() => {});
+  }
+
+  const cutoff = dayPlus(MIN_DAYS_TO_DUE);
+  for (const m of msgs) {
+    try {
+      const { body } = emailToText(m.html, m.text);
+      const bids: ExtractedBid[] = [];
+      for (const c of chunks(body.slice(0, 60_000))) bids.push(...(await extractBids(m.subject, c)));
+      db.transaction(() => {
+        for (const b of bids) {
+          if (!b.title.trim()) continue;
+          const ruled = applyRules(b, cutoff);
+          const state = (b.state || "").toUpperCase().slice(0, 2);
+          const twin = bp.find(
+            (x) => sameBid(x.title, b.title) && (!state || !x.state || x.state === state || norm(x.agency) === norm(b.agency)),
+          );
+          ins.run({
+            msg_key: m.key, portal: m.portal, subject: m.subject.slice(0, 300), received_at: m.date,
+            title: b.title.trim(), agency: b.agency.trim(), state,
+            due_date: /^\d{4}-\d{2}-\d{2}$/.test(b.due_date) ? b.due_date : "",
+            service_line: ruled ? (ruled.fit === "Drop" ? "None" : b.service_line) : "None",
+            tier: ruled ? ruled.fit : "Closed/too soon",
+            reason: ruled ? ruled.reason : "Closes within 3 days, or a document link",
+            in_bidprime: twin ? twin.id : "",
+          });
+          status.bids++;
+        }
+        markSeen.run(m.key);
+      })();
+      status.emails++;
+    } catch {
+      status.failed++;
+    }
+    setSetting("sled_gap_status", JSON.stringify(status));
+  }
+  status.done = true;
+  setSetting("sled_gap_status", JSON.stringify(status));
+  return status;
+}
+
+export function gapReport() {
+  ensureGapTable();
+  const db = getDb();
+  return {
+    status: JSON.parse(getSetting("sled_gap_status") || "{}"),
+    rows: db.prepare("SELECT portal, subject, title, agency, state, due_date, service_line, tier, reason, in_bidprime FROM sled_gap ORDER BY tier, portal").all(),
+  };
+}

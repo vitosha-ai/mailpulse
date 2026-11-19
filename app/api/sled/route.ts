@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSetting } from "@/lib/db";
-import { emailDigest, listOpen, processEmail, runSled, sledConfig, sledStats, storeEmail, updateOpp } from "@/lib/sled";
+import { emailDigest, gapReport, listOpen, processEmail, runGapTest, runSled, sledConfig, sledStats, storeEmail, updateOpp } from "@/lib/sled";
 
 // /api/sled — US State & Local (SLED) RFP agent (BidPrime alert emails).
 // GET   — open opportunities + config. ?drops=1 also returns rows the filter dropped.
@@ -15,6 +15,7 @@ import { emailDigest, listOpen, processEmail, runSled, sledConfig, sledStats, st
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   if (sp.get("stats") === "1") return NextResponse.json(sledStats());
+  if (sp.get("gap") === "1") return NextResponse.json(gapReport());
   return NextResponse.json({ rows: listOpen({ includeDrops: sp.get("drops") === "1" }), config: sledConfig() });
 }
 
@@ -36,6 +37,13 @@ export async function POST(request: NextRequest) {
     // The real digest, sent now: only bids never emailed before, then marked sent
     // (so the next morning's digest won't repeat them).
     if (body.action === "digest") return NextResponse.json({ ok: true, result: await emailDigest(true) });
+    // One-off gap test, runs in the background (too long for one HTTP request).
+    // Progress and results: GET ?gap=1.
+    if (body.action === "gaptest") {
+      const days = Math.min(30, Math.max(1, Number((body as { days?: number }).days) || 7));
+      runGapTest(days).catch((e) => console.error("[sled gap]", e instanceof Error ? e.message : e));
+      return NextResponse.json({ ok: true, started: true, days });
+    }
     if (body.action === "email") return NextResponse.json({ ok: true, result: await emailDigest(false, body.to) });
     if (body.action === "settings") {
       setSetting("sled_email_to", (body.emailTo || "").trim());
