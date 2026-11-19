@@ -57,7 +57,7 @@ export async function register() {
 
   // US State & Local (SLED) RFP agent: reads forwarded BidPrime alert emails
   // every hour, and sends ONE digest per working day (Mon-Fri, not federal
-  // holidays) at/after 8 AM ET, after BidPrime's 6 AM alert has been read.
+  // holidays) between 8 AM and noon ET, after BidPrime's 6 AM alert has been read.
   // SLED_DAILY=0 disables. No-op until the mailbox + ANTHROPIC_API_KEY are set.
   if (process.env.SLED_DAILY !== "0") {
     let sledBusy = false;
@@ -71,7 +71,9 @@ export async function register() {
         if (report.note) return; // not configured yet
         if (report.emails || report.failed) console.log("[sled]", JSON.stringify({ ...report, newIds: report.newIds.length }));
         const et = etNow();
-        if (et.hour >= 8 && isWorkingDayET() && getSetting("sled_digest_date") !== et.ymd) {
+        // Morning window only (8 AM-noon ET), so a redeploy late in the day
+        // never fires that day's digest in the evening.
+        if (et.hour >= 8 && et.hour < 12 && isWorkingDayET() && getSetting("sled_digest_date") !== et.ymd) {
           setSetting("sled_digest_date", et.ymd); // claim the day first so a failure never loops
           console.log("[sled] digest", await emailDigest(true));
         }
