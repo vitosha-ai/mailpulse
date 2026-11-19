@@ -463,7 +463,7 @@ function gmailConfig() {
 
 type Collected = { stored: string[]; skipped: number };
 
-async function collectViaGmailApi(cfg: NonNullable<ReturnType<typeof gmailConfig>>): Promise<Collected> {
+async function collectViaGmailApi(cfg: NonNullable<ReturnType<typeof gmailConfig>>, backfillDays?: number): Promise<Collected> {
   const { JWT } = await import("google-auth-library");
   const jwt = new JWT({
     email: cfg.sa.client_email,
@@ -480,7 +480,7 @@ async function collectViaGmailApi(cfg: NonNullable<ReturnType<typeof gmailConfig
   // Only BidPrime mail, last 7 days (overlap is harmless: already-stored ids are skipped).
   let pageToken = "";
   do {
-    const q = encodeURIComponent("from:bidprime.com newer_than:7d");
+    const q = encodeURIComponent(`from:bidprime.com newer_than:${backfillDays ?? 7}d`);
     const r = await fetch(`${base}/messages?q=${q}&maxResults=100${pageToken ? `&pageToken=${pageToken}` : ""}`, { headers: auth });
     if (!r.ok) throw new Error(`Gmail ${r.status}: ${(await r.text()).slice(0, 200)}`);
     const list = (await r.json()) as { messages?: { id: string }[]; nextPageToken?: string };
@@ -502,18 +502,21 @@ async function collectViaGmailApi(cfg: NonNullable<ReturnType<typeof gmailConfig
   return out;
 }
 
-async function collectViaImap(cfg: NonNullable<ReturnType<typeof imapConfig>>): Promise<Collected> {
+async function collectViaImap(cfg: NonNullable<ReturnType<typeof imapConfig>>, backfillDays?: number): Promise<Collected> {
   const out: Collected = { stored: [], skipped: 0 };
   const lastUid = Number(getSetting("sled_imap_last_uid") || 0);
+  const known = getDb().prepare("SELECT 1 FROM sled_emails WHERE msg_key = ?");
   const imap = new ImapFlow(cfg);
   await imap.connect();
   try {
     const lock = await imap.getMailboxLock("INBOX");
     try {
-      // Server-side filter: only messages from BidPrime. First run looks back 7 days.
-      const uids = lastUid
-        ? ((await imap.search({ from: "bidprime", uid: `${lastUid + 1}:*` }, { uid: true })) || []).filter((u) => u > lastUid)
-        : (await imap.search({ from: "bidprime", since: new Date(Date.now() - 7 * 86_400_000) }, { uid: true })) || [];
+      // Server-side filter: only messages from BidPrime. First run looks back 7
+      // days; a one-time backfill looks back further (already-read emails are skipped).
+      const sinceDays = backfillDays ?? (lastUid ? 0 : 7);
+      const uids = sinceDays
+        ? (await imap.search({ from: "bidprime", since: new Date(Date.now() - sinceDays * 86_400_000) }, { uid: true })) || []
+        : ((await imap.search({ from: "bidprime", uid: `${lastUid + 1}:*` }, { uid: true })) || []).filter((u) => u > lastUid);
       let maxUid = lastUid;
       for (const uid of uids) {
         // `source` is fetched with BODY.PEEK, so the message stays unread.
@@ -524,10 +527,11 @@ async function collectViaImap(cfg: NonNullable<ReturnType<typeof imapConfig>>): 
         const html = typeof p.html === "string" ? p.html : "";
         if (!isBidPrime(p.from?.text || "", p.subject || "", html)) { out.skipped++; continue; }
         const key = p.messageId || `uid-${uid}`;
+        if (known.get(key)) continue;
         storeEmail(key, (p.date ?? new Date()).toISOString(), p.subject || "", html || null, p.text || null);
         out.stored.push(key);
       }
-      setSetting("sled_imap_last_uid", String(maxUid));
+      setSetting("sled_imap_last_uid", String(Math.max(maxUid, lastUid)));
     } finally {
       lock.release();
     }
@@ -555,7 +559,7 @@ const isBidPrime = (from: string, subject: string, html: string) =>
 
 export type SledRunReport = { emails: number; skipped: number; failed: number; bids: number; inserted: number; updated: number; dropped: number; tooLate: number; newIds: string[]; note?: string };
 
-export async function runSled(): Promise<SledRunReport> {
+export async function runSled(opts: { backfillDays?: number } = {}): Promise<SledRunReport> {
   ensureTables();
   const db = getDb();
   const report: SledRunReport = { emails: 0, skipped: 0, failed: 0, bids: 0, inserted: 0, updated: 0, dropped: 0, tooLate: 0, newIds: [] };
@@ -564,7 +568,7 @@ export async function runSled(): Promise<SledRunReport> {
   if (!gmail && !imap) return { ...report, note: "Mailbox access not set up (read-only Gmail access to proposals@, or SLED_IMAP_USER / SLED_IMAP_PASS)" };
   if (!anthropicKey()) return { ...report, note: "ANTHROPIC_API_KEY not configured" };
 
-  const got = gmail ? await collectViaGmailApi(gmail) : await collectViaImap(imap!);
+  const got = gmail ? await collectViaGmailApi(gmail, opts.backfillDays) : await collectViaImap(imap!, opts.backfillDays);
   report.skipped = got.skipped;
 
   // Also retry any email a previous run stored but couldn't process.

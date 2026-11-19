@@ -6,6 +6,7 @@ import { emailDigest, listOpen, processEmail, runSled, sledConfig, sledStats, st
 // GET   — open opportunities + config. ?drops=1 also returns rows the filter dropped.
 //         ?stats=1 returns only the tile counts.
 // POST  — { action: "run" }               read the mailbox now (no email)
+//         { action: "backfill", days? }    one-time re-read of older alert emails (default 60 days)
 //         { action: "email", to? }        email everything open now (test send)
 //         { action: "settings", emailTo } save the daily recipient list
 //         { action: "import", subject, html } feed one alert email by hand (testing)
@@ -24,6 +25,12 @@ export async function POST(request: NextRequest) {
   try {
     if (body.action === "run") {
       const report = await runSled();
+      return NextResponse.json({ ok: true, report: { ...report, newIds: report.newIds.length } });
+    }
+    if (body.action === "backfill") {
+      // One-time catch-up: re-read older BidPrime alert emails (default 60 days, max 120).
+      const days = Math.min(120, Math.max(1, Number((body as { days?: number }).days) || 60));
+      const report = await runSled({ backfillDays: days });
       return NextResponse.json({ ok: true, report: { ...report, newIds: report.newIds.length } });
     }
     if (body.action === "email") return NextResponse.json({ ok: true, result: await emailDigest(false, body.to) });
