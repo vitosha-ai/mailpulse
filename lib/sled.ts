@@ -172,7 +172,7 @@ Vitosha's service lines:
 - IT Managed Services: managed IT, help desk/service desk, IT support services, cloud/infrastructure managed services, IT outsourcing.
 - IT Staffing: IT staff augmentation, technology staffing, IT temporary/contract staff, IT professional services on a time-and-materials basis.
 
-For EVERY bid listed in the email (skip nothing; ignore headers, footers, unsubscribe and account links), return one row:
+For EVERY bid listed in the email (skip nothing; ignore headers, footers, unsubscribe and account links), return one row. Document links under a bid ("Request Documents", "Download 4 documents", file names ending .pdf) are not bids - never return them as rows.
 - title: the bid title exactly as shown.
 - agency: the issuing agency/entity name, without the state prefix.
 - state: two-letter US state code, or "" if unknown.
@@ -277,7 +277,12 @@ const JUNK_TITLE =
 const IT_WORD =
   /software|system|\bdata\b|digital|technology|\bIT\b|application|portal|\bERP\b|cloud|\bAI\b|artificial intelligence|analytics|website|platform|network|cyber/i;
 
+// Link labels from the email ("Request Documents", "Download 4 documents",
+// "D006686 Notice to....pdf") are not bids.
+const NOT_A_BID = /^(request documents?|download \d+ documents?|view (bid|details)|click here.*)$|\.(pdf|docx?|xlsx?|zip)$/i;
+
 function applyRules(b: ExtractedBid, cutoff: string): { fit: ExtractedBid["fit"]; reason: string } | null {
+  if (NOT_A_BID.test(b.title.trim())) return null;
   if (b.due_date && b.due_date < cutoff) return null; // closes too soon to bid
   if (FEDERAL_OR_FOREIGN.test(b.agency) || FEDERAL_OR_FOREIGN.test(b.title)) {
     return { fit: "Drop", reason: "Federal or international notice, not state/local (federal bids are on the Federal board)." };
@@ -289,6 +294,46 @@ function applyRules(b: ExtractedBid, cutoff: string): { fit: ExtractedBid["fit"]
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Agencies often post one bid twice (two portals, two BidPrime ids, slightly
+// different titles: "ERP Implementation Partner" / "RFP - Professional
+// Services - Oracle ERP Implementation Partner Services"). Same state + same
+// due date + mostly the same title words = same bid.
+const FILLER = new Set(["rfp", "rfq", "rfi", "request", "for", "proposals", "proposal", "qualifications", "the", "and", "of", "a", "an", "to", "in", "notice", "bid", "opportunity", "services", "service", "professional", "with", "year", "contract", "2026", "2027"]);
+const words = (t: string) => new Set(norm(t).split(" ").filter((w) => w.length > 1 && !FILLER.has(w) && !/^\d+$/.test(w)));
+function sameBid(a: string, b: string) {
+  const A = words(a), B = words(b);
+  if (!A.size || !B.size) return false;
+  let both = 0;
+  A.forEach((w) => { if (B.has(w)) both++; });
+  return both / Math.min(A.size, B.size) >= 0.6;
+}
+
+// Merge rows that are the same bid. Keeps the earliest row (and the stronger
+// fit); never removes a row the team has touched (status or notes).
+export function foldDuplicates(): number {
+  ensureTables();
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT id, title, state, due_date, tier, status, notes, sent_at FROM sled_opps WHERE due_date <> '' ORDER BY rowid")
+    .all() as { id: string; title: string; state: string; due_date: string; tier: string; status: string; notes: string; sent_at: string | null }[];
+  const rank = (t: string) => (t === "Strong" ? 0 : t === "Maybe" ? 1 : 2);
+  const del = db.prepare("DELETE FROM sled_opps WHERE id = ?");
+  const promote = db.prepare("UPDATE sled_opps SET tier = ?, updated_at = datetime('now') WHERE id = ?");
+  let folded = 0;
+  db.transaction(() => {
+    const kept: typeof rows = [];
+    for (const r of rows) {
+      const twin = kept.find((k) => k.state === r.state && k.due_date === r.due_date && sameBid(k.title, r.title));
+      if (!twin) { kept.push(r); continue; }
+      if (r.status !== "New" || r.notes || r.sent_at) { kept.push(r); continue; }
+      if (rank(r.tier) < rank(twin.tier)) { promote.run(r.tier, twin.id); twin.tier = r.tier; }
+      del.run(r.id);
+      folded++;
+    }
+  })();
+  return folded;
+}
 const hash = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 16);
 
 function dayPlus(days: number) {
@@ -539,6 +584,11 @@ export async function runSled(): Promise<SledRunReport> {
       db.prepare("UPDATE sled_emails SET error = ? WHERE msg_key = ?").run(e instanceof Error ? e.message : String(e), msg_key);
     }
   }
+  // Clean-up passes: drop rows that are document links, then fold duplicate postings.
+  db.prepare(`DELETE FROM sled_opps WHERE status = 'New' AND notes = '' AND sent_at IS NULL AND (
+      lower(title) IN ('request documents', 'request document') OR lower(title) LIKE 'download % document%'
+      OR lower(title) LIKE '%.pdf' OR lower(title) LIKE '%.doc' OR lower(title) LIKE '%.docx')`).run();
+  foldDuplicates();
   setSetting("sled_last_run", new Date().toISOString());
   setSetting("sled_last_report", JSON.stringify({ ...report, newIds: report.newIds.length }));
   return report;
