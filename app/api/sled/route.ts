@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
       const report = await runSled({ backfillDays: days });
       return NextResponse.json({ ok: true, report: { ...report, newIds: report.newIds.length } });
     }
+    // The real digest, sent now: only bids never emailed before, then marked sent
+    // (so the next morning's digest won't repeat them).
+    if (body.action === "digest") return NextResponse.json({ ok: true, result: await emailDigest(true) });
     if (body.action === "email") return NextResponse.json({ ok: true, result: await emailDigest(false, body.to) });
     if (body.action === "settings") {
       setSetting("sled_email_to", (body.emailTo || "").trim());
