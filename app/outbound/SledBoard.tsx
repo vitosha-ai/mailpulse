@@ -25,6 +25,7 @@ type Opp = {
   notes: string;
   first_seen: string;
   sent_at: string | null;
+  source: string;
 };
 
 type Config = {
@@ -76,6 +77,7 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
   const [tiers, setTiers] = useState<string[]>(["Strong", "Maybe"]);
   const [line, setLine] = useState("");
   const [stateF, setStateF] = useState("");
+  const [src, setSrc] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [hideNoBid, setHideNoBid] = useState(true);
@@ -144,12 +146,13 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
         (tiers.length === 0 || tiers.includes(r.tier)) &&
         (!line || r.service_line === line) &&
         (!stateF || r.state === stateF) &&
+        (!src || (src === "direct" ? (r.source || "").startsWith("Direct") : !(r.source || "").startsWith("Direct"))) &&
         (!status || r.status === status) &&
         (!hideNoBid || r.status !== "No Bid" || status === "No Bid") &&
         inRange(dateField === "due" ? r.due_date : r.first_seen, from, to) &&
         (!needle || `${r.title} ${r.agency} ${r.refnum} ${r.alert_name}`.toLowerCase().includes(needle)),
     );
-  }, [rows, tiers, line, stateF, status, q, hideNoBid, dateField, from, to]);
+  }, [rows, tiers, line, stateF, src, status, q, hideNoBid, dateField, from, to]);
 
   const preset = (field: "due" | "added", days: number) => {
     setDateField(field);
@@ -180,7 +183,7 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
             <button onClick={onExit} className="mb-1 text-xs font-medium text-slate-400 hover:text-brand">← All agents</button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">🏙️ US State &amp; Local RFPs</h1>
             <p className="mt-0.5 text-xs text-slate-500">
-              BidPrime saved searches · all US states · filtered to Vitosha&apos;s 7 service lines · last read {ago(config?.lastRun ?? null)}
+              BidPrime saved searches + direct portal notices · all US states · filtered to Vitosha&apos;s 7 service lines · last read {ago(config?.lastRun ?? null)}
               {config?.lastEmail ? ` · last email ${ago(config.lastEmail)}` : ""}
             </p>
           </div>
@@ -261,6 +264,12 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
             <option value="">All states</option>
             {states.map((s) => <option key={s}>{s}</option>)}
           </select>
+          <select value={src} onChange={(e) => setSrc(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+            <option value="">All sources</option>
+            <option value="bidprime">BidPrime</option>
+            <option value="direct">Direct from portals</option>
+          </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)}
             className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
             <option value="">Any status</option>
@@ -336,7 +345,12 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
                           {r.first_seen === today && r.tier !== "Drop" && <span className="mr-1.5 rounded bg-brand px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>}
                           {r.title}
                         </p>
-                        <p className="text-xs text-slate-500">{r.agency}{r.state ? ` · ${r.state}` : ""}</p>
+                        <p className="text-xs text-slate-500">
+                          {r.agency}{r.state ? ` · ${r.state}` : ""}
+                          {(r.source || "").startsWith("Direct") && (
+                            <span className="ml-1.5 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">{r.source}</span>
+                          )}
+                        </p>
                       </td>
                       <td className="px-3 py-2 text-xs text-slate-600">{r.service_line === "None" ? "—" : r.service_line}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{r.entity_type}</td>
@@ -362,8 +376,8 @@ export default function SledBoard({ onExit }: { onExit: () => void }) {
                               {r.alert_name && <p className="text-slate-500">BidPrime alert: {r.alert_name}</p>}
                               {r.url ? (
                                 <a href={r.url} target="_blank" rel="noreferrer"
-                                  className="mt-2 inline-block rounded-lg bg-brand px-3 py-1.5 font-semibold text-white hover:bg-brand-dark">Open in BidPrime ↗</a>
-                              ) : <p className="pt-1 text-slate-400">No link in the alert email; search BidPrime for the title.</p>}
+                                  className="mt-2 inline-block rounded-lg bg-brand px-3 py-1.5 font-semibold text-white hover:bg-brand-dark">{(r.source || "").startsWith("Direct") ? "Open on the portal ↗" : "Open in BidPrime ↗"}</a>
+                              ) : <p className="pt-1 text-slate-400">{(r.source || "").startsWith("Direct") ? `Open the notice in proposals@ (from ${r.source.replace("Direct · ", "")}).` : "No link in the alert email; search BidPrime for the title."}</p>}
                             </div>
                             <div className="space-y-1">
                               <p className="font-mono text-[9px] font-semibold uppercase tracking-wider text-slate-500">Why this fit</p>

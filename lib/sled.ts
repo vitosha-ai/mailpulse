@@ -55,6 +55,7 @@ export type SledOpp = {
   first_seen: string;
   last_seen: string;
   sent_at: string | null;
+  source: string;
 };
 
 function ensureTables() {
@@ -94,6 +95,26 @@ function ensureTables() {
       error TEXT NOT NULL DEFAULT ''
     );
   `);
+  // Where a row/email came from: "BidPrime" or "Direct · <portal>".
+  for (const t of ["sled_opps", "sled_emails"]) {
+    const cols = getDb().prepare(`PRAGMA table_info(${t})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === "source")) getDb().exec(`ALTER TABLE ${t} ADD COLUMN source TEXT NOT NULL DEFAULT 'BidPrime'`);
+  }
+}
+
+// Friendly name for a direct portal from the sender address.
+const PORTALS: [RegExp, string][] = [
+  [/vermont\.gov$/, "State of Vermont"], [/phila\.gov$/, "City of Philadelphia"], [/montana\.gov$/, "Montana eMACS"],
+  [/proactis\.com$/, "CTsource (Connecticut)"], [/opengov\.com$/, "OpenGov"], [/hostams\.com$/, "Colorado VSS"],
+  [/doas\.ga\.gov$/, "Georgia Procurement"], [/myflorida\.com$/, "MyFloridaMarketPlace"], [/uri\.edu$/, "RhodyBuy (Rhode Island)"],
+  [/nd\.gov$/, "North Dakota NDBuys"], [/buyspeed\.com$/, "BuySpeed"], [/ariba\.com$/, "SAP Ariba"], [/commbuys\.com$/, "COMMBUYS (Massachusetts)"],
+  [/sc\.gov$/, "South Carolina"], [/biddingo\.com$/, "Biddingo"], [/bidsandtenders\.net$/, "bids&tenders"], [/centralauctionhouse\.com$/, "Central Auction House"],
+];
+function portalName(addr: string) {
+  const [local, domain = ""] = addr.toLowerCase().split("@");
+  if (/ionwave\.net$/.test(domain)) return `Ionwave (${local})`;
+  for (const [re, name] of PORTALS) if (re.test(domain)) return name;
+  return domain || addr;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +183,7 @@ function chunks(body: string): string[] {
 // ---------------------------------------------------------------------------
 // Claude Haiku: extract every bid + judge fit, in one call per email chunk.
 
-const SYSTEM = `You read BidPrime bid-alert emails for Vitosha, an IT services company, and turn them into structured rows.
+const SYSTEM = `You read bid-notification emails for Vitosha, an IT services company - BidPrime alerts and notices from government eProcurement portals - and turn them into structured rows. If an email is about one bid (an invitation, addendum, Q&A or reminder), return that one bid. If it is not about any bid (account notices, newsletters, marketing), return no rows.
 
 Vitosha's service lines:
 - Data & AI: analytics, BI, dashboards, data warehouse/lake, data integration/migration/governance, AI/ML, generative AI, chatbots, RPA and intelligent automation, AI strategy or roadmaps.
@@ -349,14 +370,15 @@ export async function processEmail(msgKey: string): Promise<SledProcessReport> {
   ensureTables();
   const db = getDb();
   const em = db.prepare("SELECT * FROM sled_emails WHERE msg_key = ?").get(msgKey) as
-    | { subject: string; body: string; links: string }
+    | { subject: string; body: string; links: string; source: string }
     | undefined;
   if (!em) throw new Error("email not found");
   const links = JSON.parse(em.links) as string[];
   const report: SledProcessReport = { bids: 0, inserted: 0, updated: 0, dropped: 0, tooLate: 0, newIds: [] };
 
   const bids: ExtractedBid[] = [];
-  for (const c of chunks(em.body)) bids.push(...(await extractBids(em.subject, c)));
+  const body = em.source && em.source !== "BidPrime" ? em.body.slice(0, 40_000) : em.body;
+  for (const c of chunks(body)) bids.push(...(await extractBids(em.subject, c)));
   report.bids = bids.length;
 
   const cutoff = dayPlus(MIN_DAYS_TO_DUE);
@@ -366,9 +388,9 @@ export async function processEmail(msgKey: string): Promise<SledProcessReport> {
   const byTitle = db.prepare("SELECT id FROM sled_opps WHERE title_key = ? AND state = ? AND title_key <> '' LIMIT 1");
   const insert = db.prepare(`
     INSERT INTO sled_opps (id, title, agency, state, entity_type, refnum, posted_date, due_date, url,
-      alert_name, service_line, tier, reason, title_key)
+      alert_name, service_line, tier, reason, title_key, source)
     VALUES (@id, @title, @agency, @state, @entity_type, @refnum, @posted_date, @due_date, @url,
-      @alert_name, @service_line, @tier, @reason, @title_key)`);
+      @alert_name, @service_line, @tier, @reason, @title_key, @source)`);
   const touch = db.prepare(`
     UPDATE sled_opps SET last_seen = date('now'), updated_at = datetime('now'),
       due_date = CASE WHEN @due_date <> '' THEN @due_date ELSE due_date END,
@@ -413,6 +435,7 @@ export async function processEmail(msgKey: string): Promise<SledProcessReport> {
         tier: ruled.fit,
         reason: ruled.reason,
         title_key: titleKey,
+        source: em.source || "BidPrime",
       };
       if (existing) {
         touch.run(row);
@@ -428,15 +451,15 @@ export async function processEmail(msgKey: string): Promise<SledProcessReport> {
   return report;
 }
 
-export function storeEmail(msgKey: string, receivedAt: string, subject: string, html: string | null, text: string | null) {
+export function storeEmail(msgKey: string, receivedAt: string, subject: string, html: string | null, text: string | null, source = "BidPrime") {
   ensureTables();
   const { body, links } = emailToText(html, text);
   getDb()
     .prepare(
-      `INSERT INTO sled_emails (msg_key, received_at, subject, body, links) VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO sled_emails (msg_key, received_at, subject, body, links, source) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(msg_key) DO NOTHING`,
     )
-    .run(msgKey, receivedAt, subject, body, JSON.stringify(links));
+    .run(msgKey, receivedAt, subject, body, JSON.stringify(links), source);
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +555,25 @@ async function collectViaImap(cfg: NonNullable<ReturnType<typeof imapConfig>>, b
         out.stored.push(key);
       }
       setSetting("sled_imap_last_uid", String(Math.max(maxUid, lastUid)));
+
+      // Direct agency-portal bid emails (Ionwave, OpenGov, state eProcurement...).
+      // Gmail search over IMAP; window overlaps, already-stored ones are skipped.
+      // First time looks back 7 days.
+      const directDays = backfillDays ?? (getSetting("sled_direct_on") ? 2 : 7);
+      const direct = (await imap.search({ gmraw: `newer_than:${directDays}d ${GAP_QUERY}` }, { uid: true })) || [];
+      for (const uid of direct) {
+        const msg = await imap.fetchOne(String(uid), { source: true }, { uid: true });
+        if (!msg || !msg.source) continue;
+        const p = await simpleParser(msg.source as Buffer);
+        const addr = p.from?.value?.[0]?.address || "";
+        const html = typeof p.html === "string" ? p.html : "";
+        if (isBidPrime(addr, "", "")) continue;
+        const key = p.messageId || `uid-d-${uid}`;
+        if (known.get(key)) continue;
+        storeEmail(key, (p.date ?? new Date()).toISOString(), p.subject || "", html || null, p.text || null, `Direct · ${portalName(addr)}`);
+        out.stored.push(key);
+      }
+      setSetting("sled_direct_on", "1");
     } finally {
       lock.release();
     }
@@ -671,7 +713,7 @@ export async function buildWorkbook(rows: SledOpp[], newIds: Set<string>): Promi
   const ws = wb.addWorksheet("SLED opportunities", { views: [{ state: "frozen", xSplit: 3, ySplit: 1 }] });
   const cols: [string, number][] = [
     ["Fit", 9], ["Service line", 24], ["Title", 60], ["New", 6], ["Agency", 36], ["State", 7], ["Agency type", 18],
-    ["Due", 11], ["Posted", 11], ["Ref #", 18], ["Why", 60], ["Status", 11], ["BidPrime alert", 26], ["Link", 10],
+    ["Due", 11], ["Posted", 11], ["Ref #", 18], ["Why", 60], ["Status", 11], ["Source", 26], ["BidPrime alert", 26], ["Link", 10],
   ];
   ws.columns = cols.map(([header, width]) => ({ header, width }));
   ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -680,14 +722,14 @@ export async function buildWorkbook(rows: SledOpp[], newIds: Set<string>): Promi
   rows.forEach((r) => {
     const row = ws.addRow([
       r.tier, r.service_line, r.title, newIds.has(r.id) ? "NEW" : "", r.agency, r.state, r.entity_type,
-      r.due_date, r.posted_date, r.refnum, r.reason, r.status, r.alert_name,
+      r.due_date, r.posted_date, r.refnum, r.reason, r.status, r.source || "BidPrime", r.alert_name,
       r.url ? { text: "Open", hyperlink: r.url } : "",
     ]);
     row.alignment = { vertical: "top" };
     row.getCell(3).alignment = { vertical: "top", wrapText: true };
     row.getCell(11).alignment = { vertical: "top", wrapText: true };
     row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: fills[r.tier] } };
-    row.getCell(14).font = { color: { argb: "FF0563C1" }, underline: true };
+    row.getCell(15).font = { color: { argb: "FF0563C1" }, underline: true };
     if (newIds.has(r.id)) row.getCell(4).font = { bold: true, color: { argb: "FF0B40B0" } };
   });
   ws.autoFilter = { from: "A1", to: { row: rows.length + 1, column: cols.length } };
@@ -722,12 +764,12 @@ export async function emailDigest(daily: boolean, toOverride?: string): Promise<
   const item = (r: SledOpp) =>
     `<tr><td style="padding:3px 8px;vertical-align:top"><b style="color:${r.tier === "Strong" ? "#047857" : "#b45309"}">${r.tier}</b></td>` +
     `<td style="padding:3px 8px">${r.url ? `<a href="${esc(r.url)}">${esc(r.title)}</a>` : esc(r.title)}<br>` +
-    `<span style="color:#64748b;font-size:12px">${esc(r.agency)}${r.state ? ", " + r.state : ""} · due ${r.due_date || "n/a"} · ${esc(r.reason)}</span></td></tr>`;
+    `<span style="color:#64748b;font-size:12px">${esc(r.agency)}${r.state ? ", " + r.state : ""} · due ${r.due_date || "n/a"}${r.source && r.source !== "BidPrime" ? " · <b>" + esc(r.source) + "</b>" : ""} · ${esc(r.reason)}</span></td></tr>`;
   const sections = groups
     .map((g) => `<p style="margin:16px 0 4px"><b>${g.line === "None" ? "Other IT" : esc(g.line)}</b> (${g.items.length})</p><table style="border-collapse:collapse">${g.items.slice(0, 15).map(item).join("")}</table>` +
       (g.items.length > 15 ? `<p style="color:#64748b;font-size:12px">+${g.items.length - 15} more in the attached Excel</p>` : ""))
     .join("");
-  const footer = `<p style="color:#64748b;font-size:12px">Source: BidPrime saved searches (all US state &amp; local). Construction, equipment, licence-only, federal and anything closing within 3 days are left out. Full list on the State &amp; Local RFPs board in MailPulse.</p><p style="color:#64748b;font-size:12px">— MailPulse · State &amp; Local agent</p>`;
+  const footer = `<p style="color:#64748b;font-size:12px">Sources: BidPrime saved searches (all US state &amp; local) plus bid notices sent to proposals@ directly by agency portals. Construction, equipment, licence-only, federal and anything closing within 3 days are left out. Full list on the State &amp; Local RFPs board in MailPulse.</p><p style="color:#64748b;font-size:12px">— MailPulse · State &amp; Local agent</p>`;
   const html = quiet
     ? `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a"><p>No new state &amp; local opportunities matched Vitosha's services since the last email.</p><p>${open.length} are still open on the board.</p>${footer}</div>`
     : `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a"><p>${rows.length} ${daily ? "new" : "open"} state &amp; local opportunities matching Vitosha's services (${strong} strong fit), grouped by service line. The full list is attached.</p>${sections}${footer}</div>`;
