@@ -858,7 +858,10 @@ function ensureGapTable() {
 
 const GAP_QUERY =
   "-from:bidprime.com -from:vitoshainc.com -from:vitosha-inc.com " +
-  "(bid OR bids OR solicitation OR opportunity OR RFP OR RFQ OR RFI OR addendum OR invitation OR sourcing OR tender)";
+  "(bid OR bids OR solicitation OR opportunity OR RFP OR RFQ OR RFI OR addendum OR invitation OR sourcing OR tender " +
+  // Direct invitations from state IT teams to pre-qualified vendors (e.g. Colorado
+  // OIT "Vendor Development Proposal Request", Vermont "SOW RFP").
+  "OR \"proposal request\" OR \"request for quote\" OR \"provide a quote\" OR \"statement of work\" OR \"statement of objectives\" OR SOW OR SOO)";
 
 export async function runGapTest(days = 7): Promise<Record<string, unknown>> {
   ensureTables();
